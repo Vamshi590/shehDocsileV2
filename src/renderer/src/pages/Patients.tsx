@@ -455,7 +455,7 @@ const Patients: React.FC = () => {
         )}
         {loading && <p className="text-center">Loading...</p>}
         {!loading && patients.length === 0 ? (
-          <div className="text-center py-12 border border-dashed border-gray-200 rounded-lg bg-gray-50">
+          <div className="text-center py-12 border border-dashed border-gray-200 rounded-lg bg-white">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-16 w-16 mx-auto text-gray-300 mb-4"
@@ -472,7 +472,7 @@ const Patients: React.FC = () => {
             </svg>
             <p className="text-gray-600 text-lg mb-2">No patients found</p>
             <p className="text-gray-500 mb-6">
-              Click the &quot;Add Patient&quot; button to create your first patient record
+              Click the &quot;Add Patient&quot; button to create your first patient record today
             </p>
             <button
               onClick={() => setShowAddForm(true)}

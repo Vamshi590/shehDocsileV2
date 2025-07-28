@@ -58,6 +58,8 @@ interface LabFormProps {
   labCount: number
   initialData?: Partial<Lab>
   selectedPatient?: Patient | null
+  isVennelaMode?: boolean
+  isGeneralCustomer?: boolean
   // Removed unused patients parameter
 }
 
@@ -66,11 +68,15 @@ const LabForm: React.FC<LabFormProps> = ({
   onCancel,
   labCount,
   initialData = {},
-  selectedPatient = null
+  selectedPatient = null,
+  isVennelaMode = false,
+  isGeneralCustomer = false
   // Removing unused patients parameter
 }) => {
   // Tab state
-  const [activeTab, setActiveTab] = useState<'regular' | 'vannela'>('regular')
+  const [activeTab, setActiveTab] = useState<'regular' | 'vannela'>(
+    isVennelaMode ? 'vannela' : 'regular'
+  )
 
   // Helper function to get patient information
   const getPatientInfo = (): Record<string, unknown> => {
@@ -99,7 +105,8 @@ const LabForm: React.FC<LabFormProps> = ({
       labTestFields[`${prefix}AMOUNT ${i}`] = ''
     }
 
-    return {
+    // Base form values
+    const baseValues = {
       'DOCTOR NAME': 'Dr. Srilatha ch',
       DEPARTMENT: 'Opthalmology',
       'REFFERED BY': 'Self',
@@ -113,14 +120,26 @@ const LabForm: React.FC<LabFormProps> = ({
       [`${prefix}AMOUNT RECEIVED`]: 0,
       [`${prefix}AMOUNT DUE`]: 0,
 
-      // Add patient information
-      ...patientInfo,
-
       // Add current date
       DATE: new Date().toISOString().split('T')[0],
 
       // Add type
       type: isVannela ? 'vannela' : 'regular'
+    }
+
+    // Add Vennela-specific fields for general customers
+    if (isVannela && isGeneralCustomer) {
+      return {
+        ...baseValues,
+        'PATIENT NAME': '',
+        'DOCTOR NAME': 'Dr. Srilatha ch'
+      }
+    }
+
+    // Add patient information for registered patients
+    return {
+      ...baseValues,
+      ...patientInfo
     }
   }
 
@@ -570,6 +589,51 @@ const LabForm: React.FC<LabFormProps> = ({
       {/* Vannela Labs Form */}
       {activeTab === 'vannela' && (
         <form onSubmit={handleVannelaSubmit} className="space-y-6">
+          {/* General Customer Fields - Only shown when isGeneralCustomer is true */}
+          {isGeneralCustomer && (
+            <div className="bg-white p-4 rounded-md shadow">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Patient Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Patient Name */}
+                <div>
+                  <label
+                    htmlFor="VPATIENT NAME"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Patient Name
+                  </label>
+                  <input
+                    type="text"
+                    name="PATIENT NAME"
+                    id="PATIENT NAME"
+                    value={(vannelaFormData['PATIENT NAME'] as string) || ''}
+                    onChange={handleVannelaChange}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter patient name"
+                    required
+                  />
+                </div>
+
+                {/* Doctor Name */}
+                <div>
+                  <label htmlFor="VDOCTOR NAME" className="block text-sm font-medium text-gray-700">
+                    Doctor Name
+                  </label>
+                  <input
+                    type="text"
+                    name="DOCTOR NAME"
+                    id="DOCTOR NAME"
+                    value={(vannelaFormData['DOCTOR NAME'] as string) || 'Dr. Srilatha ch'}
+                    onChange={handleVannelaChange}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter doctor name"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Lab Tests Section */}
           <div className="bg-white p-4 rounded-md shadow">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Vannela Lab Tests</h3>

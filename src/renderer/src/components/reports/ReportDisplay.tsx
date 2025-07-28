@@ -52,6 +52,10 @@ const ReportDisplay: React.FC<ReportDisplayProps> = ({ reports }) => {
   const [expandedReport, setExpandedReport] = useState<string | null>(null)
   const [selectedReceiptType, setSelectedReceiptType] = useState<string>('')
   const [selectedOperation, setSelectedOperation] = useState<Operation | undefined>(undefined)
+  // New state variables for report mode
+  const [isReportMode, setIsReportMode] = useState<boolean>(false)
+  const [reportReceiptTypes, setReportReceiptTypes] = useState<string[]>([])
+
   // We'll store the active report for future dynamic receipt type detection
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const setActiveReport = (_report: Prescription | null): void => {
@@ -196,13 +200,45 @@ const ReportDisplay: React.FC<ReportDisplayProps> = ({ reports }) => {
                           patientPhone={phoneNumber}
                           patientId={patientId}
                           onSelectReceiptType={(type, operationData) => {
+                            setIsReportMode(false) // Exit report mode when selecting a single receipt
                             setSelectedReceiptType(type)
                             setSelectedOperation(operationData)
+                          }}
+                          onGenerateReport={(types) => {
+                            // Set report mode and store selected receipt types
+                            setIsReportMode(true)
+                            setReportReceiptTypes(types)
+                            // Clear single receipt selection
+                            setSelectedReceiptType('')
+                            setSelectedOperation(undefined)
                           }}
                         />
 
                         {/* Receipt Viewer */}
-                        {selectedReceiptType ? (
+                        {isReportMode ? (
+                          <div className="mt-4 border border-gray-200 rounded-md overflow-hidden">
+                            <div className="p-2 bg-gray-100 border-b border-gray-200">
+                              <h4 className="font-medium text-gray-700">Full Report</h4>
+                            </div>
+                            <div className="overflow-y-auto max-h-[70vh]">
+                              {reportReceiptTypes.map((receiptType) => (
+                                <div
+                                  key={receiptType}
+                                  className="mb-4"
+                                  id={`receipt-${receiptType}`}
+                                >
+                                  <ReceiptViewer
+                                    report={report}
+                                    receiptType={receiptType}
+                                    selectedOperation={
+                                      receiptType === 'operation' ? selectedOperation : undefined
+                                    }
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : selectedReceiptType ? (
                           <div className="mt-4 border border-gray-200 rounded-md overflow-hidden">
                             <ReceiptViewer
                               report={report}

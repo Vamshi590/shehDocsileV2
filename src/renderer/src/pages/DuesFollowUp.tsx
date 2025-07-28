@@ -168,15 +168,24 @@ const DuesFollowUp: React.FC = () => {
           }
         }
 
-        // Generate dates for today and the next 4 days (5 days total)
+        // Generate dates for yesterday, today and the next 4 days (6 days total)
         const followUpDates: string[] = []
+
+        // Add yesterday's date
+        const yesterday = new Date()
+        yesterday.setDate(yesterday.getDate() - 1)
+        followUpDates.push(yesterday.toISOString().split('T')[0])
+
+        // Add today and next 4 days
         for (let i = 0; i < 5; i++) {
           const date = new Date()
           date.setDate(date.getDate() + i)
           followUpDates.push(date.toISOString().split('T')[0])
         }
 
-        // Filter operations with follow-up dates in the next 5 days
+        console.log('Looking for operations with follow-up dates:', followUpDates)
+
+        // Filter operations with follow-up dates in yesterday, today, and the next 4 days
         const upcomingFollowUps = operationsData.filter((operation) => {
           const followUpDate = operation.followUpDate || operation.reviewOn || ''
           return followUpDates.includes(followUpDate)
@@ -227,15 +236,24 @@ const DuesFollowUp: React.FC = () => {
 
       // Check if prescriptions data exists
       if (prescriptionsData.length > 0) {
-        // Generate dates for today and the next 4 days (5 days total)
+        // Generate dates for yesterday, today and the next 4 days (6 days total)
         const followUpDates: string[] = []
+
+        // Add yesterday's date
+        const yesterday = new Date()
+        yesterday.setDate(yesterday.getDate() - 1)
+        followUpDates.push(yesterday.toISOString().split('T')[0])
+
+        // Add today and next 4 days
         for (let i = 0; i < 5; i++) {
           const date = new Date()
           date.setDate(date.getDate() + i)
           followUpDates.push(date.toISOString().split('T')[0])
         }
 
-        // Filter prescriptions with follow-up dates in the next 5 days
+        console.log('Looking for prescriptions with follow-up dates:', followUpDates)
+
+        // Filter prescriptions with follow-up dates in yesterday, today, and the next 4 days
         const upcomingFollowUps = prescriptionsData.filter((prescription) => {
           const followUpDate = String(prescription['FOLLOW UP DATE'] || '')
           return followUpDates.includes(followUpDate)

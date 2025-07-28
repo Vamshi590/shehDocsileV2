@@ -720,14 +720,14 @@ const LabTableWithReceipts: React.FC<LabTableWithReceiptsProps> = ({
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {labs.map((lab) => (
+              {labs.map((lab, index) => (
                 <tr
                   key={lab.id as string}
                   className={`hover:bg-gray-50 cursor-pointer ${selectedLab?.id === lab.id ? 'bg-blue-50' : ''}`}
                   onClick={() => handleRowClick(lab)}
                 >
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {(lab.Sno as React.ReactNode) || '-'}
+                    {index + 1 || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {(lab.DATE as React.ReactNode) || '-'}
@@ -757,19 +757,31 @@ const LabTableWithReceipts: React.FC<LabTableWithReceiptsProps> = ({
                     {(lab['DOCTOR NAME'] as React.ReactNode) || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {lab['TOTAL AMOUNT'] !== undefined && lab['TOTAL AMOUNT'] !== null
-                      ? `₹${lab['TOTAL AMOUNT']}`
-                      : '-'}
+                    {lab.type === 'vannela'
+                      ? lab['VTOTAL AMOUNT'] !== undefined && lab['VTOTAL AMOUNT'] !== null
+                        ? `₹${lab['VTOTAL AMOUNT']}`
+                        : '-'
+                      : lab['TOTAL AMOUNT'] !== undefined && lab['TOTAL AMOUNT'] !== null
+                        ? `₹${lab['TOTAL AMOUNT']}`
+                        : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {lab['AMOUNT RECEIVED'] !== undefined && lab['AMOUNT RECEIVED'] !== null
-                      ? `₹${lab['AMOUNT RECEIVED']}`
-                      : '-'}
+                    {lab.type === 'vannela'
+                      ? lab['VAMOUNT RECEIVED'] !== undefined && lab['VAMOUNT RECEIVED'] !== null
+                        ? `₹${lab['VAMOUNT RECEIVED']}`
+                        : '-'
+                      : lab['AMOUNT RECEIVED'] !== undefined && lab['AMOUNT RECEIVED'] !== null
+                        ? `₹${lab['AMOUNT RECEIVED']}`
+                        : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {lab['AMOUNT DUE'] !== undefined && lab['AMOUNT DUE'] !== null
-                      ? `₹${lab['AMOUNT DUE']}`
-                      : '-'}
+                    {lab.type === 'vannela'
+                      ? lab['VAMOUNT DUE'] !== undefined && lab['VAMOUNT DUE'] !== null
+                        ? `₹${lab['VAMOUNT DUE']}`
+                        : '-'
+                      : lab['AMOUNT DUE'] !== undefined && lab['AMOUNT DUE'] !== null
+                        ? `₹${lab['AMOUNT DUE']}`
+                        : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">

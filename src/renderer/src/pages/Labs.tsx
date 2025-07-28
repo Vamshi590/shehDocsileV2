@@ -14,7 +14,9 @@ type Lab = {
 interface StandardizedResponse<T> {
   success: boolean
   data?: T | null
-  message?: string
+  error?: string | null
+  statusCode?: number
+  message?: string // For backward compatibility
 }
 
 // Import the Patient type from LabForm to ensure consistency
@@ -57,6 +59,7 @@ const Labs: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
   const [editingLab, setEditingLab] = useState<Lab | null>(null)
   const [isAddingNewLab, setIsAddingNewLab] = useState<boolean>(false)
+  const [isAddingVennelaLab, setIsAddingVennelaLab] = useState<boolean>(false)
 
   // Load labs and patients data on component mount
   useEffect(() => {
@@ -69,11 +72,23 @@ const Labs: React.FC = () => {
   const loadLabs = async (): Promise<void> => {
     setIsLoading(true)
     try {
-      const result = await window.api.getLabs()
-      if (result && Array.isArray(result)) {
-        setLabs(result)
+      const response = await window.api.getLabs()
+      // Handle standardized response format
+      if (response && typeof response === 'object' && 'success' in response) {
+        const standardizedResponse = response as StandardizedResponse<Lab[]>
+
+        if (standardizedResponse.success && Array.isArray(standardizedResponse.data)) {
+          setLabs(standardizedResponse.data)
+        } else {
+          console.error('Failed to load labs:', standardizedResponse.error || 'Unknown error')
+          toast.error(`Failed to load labs: ${standardizedResponse.error || 'Unknown error'}`)
+          setLabs([])
+        }
+      } else if (Array.isArray(response)) {
+        // Legacy format (direct array)
+        setLabs(response)
       } else {
-        console.error('Invalid labs data format:', result)
+        console.error('Invalid labs data format:', response)
         setLabs([])
       }
     } catch (error) {
@@ -88,12 +103,26 @@ const Labs: React.FC = () => {
   // Load today's labs to get the lab count
   const loadTodaysLabs = async (): Promise<void> => {
     try {
-      const result = await window.api.getTodaysLabs()
-      if (result && Array.isArray(result)) {
-        // Just set the lab count based on today's labs
-        setLabCount(result.length + 1) // Set the count for the next lab
+      const response = await window.api.getTodaysLabs()
+      // Handle standardized response format
+      if (response && typeof response === 'object' && 'success' in response) {
+        const standardizedResponse = response as StandardizedResponse<Lab[]>
+
+        if (standardizedResponse.success && Array.isArray(standardizedResponse.data)) {
+          // Just set the lab count based on today's labs
+          setLabCount(standardizedResponse.data.length + 1) // Set the count for the next lab
+        } else {
+          console.error(
+            "Failed to load today's labs:",
+            standardizedResponse.error || 'Unknown error'
+          )
+          setLabCount(1)
+        }
+      } else if (Array.isArray(response)) {
+        // Legacy format (direct array)
+        setLabCount(response.length + 1)
       } else {
-        console.error("Invalid today's labs data format:", result)
+        console.error("Invalid today's labs data format:", response)
         setLabCount(1)
       }
     } catch (error) {
@@ -215,19 +244,41 @@ const Labs: React.FC = () => {
         createdBy: getCurrentUser()
       }
 
-      const result = await window.api.addLab(labWithCreatedBy)
-      if (result) {
-        toast.success('Lab record added successfully')
-        await loadLabs()
-        await loadTodaysLabs()
-        setIsAddingNewLab(false)
-        setFoundPatient(null)
+      const response = await window.api.addLab(labWithCreatedBy)
+      // Handle standardized response format
+      if (response && typeof response === 'object' && 'success' in response) {
+        const standardizedResponse = response as unknown as StandardizedResponse<Lab>
+
+        if (standardizedResponse.success && standardizedResponse.data) {
+          toast.success('Lab record added successfully')
+          await loadLabs()
+          await loadTodaysLabs()
+          setIsAddingNewLab(false)
+          setIsAddingVennelaLab(false)
+          setFoundPatient(null)
+        } else {
+          console.error('Failed to add lab record:', standardizedResponse.error || 'Unknown error')
+          toast.error(`Failed to add lab record: ${standardizedResponse.error || 'Unknown error'}`)
+        }
+      } else if (response) {
+        // Legacy format (direct object) - cast to unknown first to avoid type errors
+        const legacyResponse = response as unknown
+        if (legacyResponse) {
+          toast.success('Lab record added successfully')
+          await loadLabs()
+          await loadTodaysLabs()
+          setIsAddingNewLab(false)
+          setIsAddingVennelaLab(false)
+          setFoundPatient(null)
+        }
       } else {
         toast.error('Failed to add lab record')
       }
     } catch (error) {
       console.error('Error adding lab:', error)
-      toast.error('Failed to add lab record')
+      toast.error(
+        `Failed to add lab record: ${error instanceof Error ? error.message : 'Unknown error'}`
+      )
     }
   }
 
@@ -242,34 +293,81 @@ const Labs: React.FC = () => {
       }
 
       // No need to pass ID separately as we're passing the full lab object with ID
-      const result = await window.api.updateLab(labData)
-      if (result) {
-        toast.success('Lab record updated successfully')
-        await loadLabs()
-        await loadTodaysLabs()
-        setIsModalOpen(false)
-        setEditingLab(null)
+      const response = await window.api.updateLab(labData)
+      // Handle standardized response format
+      if (response && typeof response === 'object' && 'success' in response) {
+        const standardizedResponse = response as unknown as StandardizedResponse<Lab>
+
+        if (standardizedResponse.success && standardizedResponse.data) {
+          toast.success('Lab record updated successfully')
+          await loadLabs()
+          await loadTodaysLabs()
+          setIsModalOpen(false)
+          setEditingLab(null)
+        } else {
+          console.error(
+            'Failed to update lab record:',
+            standardizedResponse.error || 'Unknown error'
+          )
+          toast.error(
+            `Failed to update lab record: ${standardizedResponse.error || 'Unknown error'}`
+          )
+        }
+      } else if (response) {
+        // Legacy format (direct object) - cast to unknown first to avoid type errors
+        const legacyResponse = response as unknown
+        if (legacyResponse) {
+          toast.success('Lab record updated successfully')
+          await loadLabs()
+          await loadTodaysLabs()
+          setIsModalOpen(false)
+          setEditingLab(null)
+        }
       } else {
         toast.error('Failed to update lab record')
       }
     } catch (error) {
       console.error('Error updating lab:', error)
-      toast.error('Failed to update lab record')
+      toast.error(
+        `Failed to update lab record: ${error instanceof Error ? error.message : 'Unknown error'}`
+      )
     }
   }
 
   // Handle deleting a lab
   const handleDeleteLab = async (id: string): Promise<void> => {
     try {
-      const result = await window.api.deleteLab(id)
-      if (result) {
+      const response = await window.api.deleteLab(id)
+      // Handle standardized response format
+      if (response && typeof response === 'object' && 'success' in response) {
+        const standardizedResponse = response as StandardizedResponse<boolean>
+
+        if (standardizedResponse.success) {
+          toast.success('Lab record deleted successfully')
+          await loadLabs()
+          await loadTodaysLabs()
+        } else {
+          console.error(
+            'Failed to delete lab record:',
+            standardizedResponse.error || 'Unknown error'
+          )
+          toast.error(
+            `Failed to delete lab record: ${standardizedResponse.error || 'Unknown error'}`
+          )
+        }
+      } else if (response === true) {
+        // Legacy format (direct boolean)
         toast.success('Lab record deleted successfully')
         await loadLabs()
         await loadTodaysLabs()
+      } else {
+        toast.error('Failed to delete lab record')
       }
     } catch (error) {
       console.error('Error deleting lab:', error)
-      toast.error('Failed to delete lab record')
+      toast.error(
+        `Failed to delete lab record: ${error instanceof Error ? error.message : 'Unknown error'}`
+      )
     }
   }
 
@@ -283,6 +381,11 @@ const Labs: React.FC = () => {
   const handleCancelLabForm = (): void => {
     setIsAddingNewLab(false)
     setFoundPatient(null)
+  }
+
+  // Handle canceling vennela lab form
+  const handleCancelVennelaLabForm = (): void => {
+    setIsAddingVennelaLab(false)
   }
 
   // Handle closing the edit modal
@@ -309,10 +412,31 @@ const Labs: React.FC = () => {
       <header className="bg-white shadow-sm sticky top-0 z-10 mb-6">
         <div className="max-w-7xl mx-auto px-6 py-4 sm:px-8 lg:px-10 flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-medium text-gray-800">Patient Management</h1>
+            <h1 className="text-2xl font-medium text-gray-800">Labs</h1>
             <p className="text-sm text-gray-500">Sri Harsha Eye Hospital</p>
           </div>
           <div className="flex items-center space-x-3">
+            <button
+              onClick={() => {
+                setIsAddingVennelaLab(true)
+                setFoundPatient(null) // Clear any selected patient for general customer form
+              }}
+              className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <span>Create Vennela Lab</span>
+            </button>
             <button
               onClick={() => (window.location.hash = '/dashboard')}
               className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
@@ -493,6 +617,21 @@ const Labs: React.FC = () => {
             onCancel={handleCancelLabForm}
             labCount={labCount}
             selectedPatient={foundPatient}
+          />
+        </div>
+      )}
+
+      {/* Vennela Lab Form Section */}
+      {isAddingVennelaLab && (
+        <div className="max-w-7xl mx-auto py-4 sm:px-8 mb-8 bg-white p-4 rounded-lg border border-gray-100">
+          <h2 className="text-xl font-semibold mb-4">Add Vennela Lab Record</h2>
+          <LabForm
+            onSubmit={handleAddLab}
+            onCancel={handleCancelVennelaLabForm}
+            labCount={labCount}
+            selectedPatient={foundPatient} // This can be null for general customers
+            isVennelaMode={true}
+            isGeneralCustomer={!foundPatient} // Flag to indicate this is for a general customer
           />
         </div>
       )}

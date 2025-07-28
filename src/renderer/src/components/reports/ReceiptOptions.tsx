@@ -34,6 +34,7 @@ interface ReceiptOptionsProps {
   patientName: string
   patientPhone: string
   onSelectReceiptType: (type: string, operationData?: Operation) => void
+  onGenerateReport?: (types: string[]) => void // New prop for handling multiple receipts
   patientId?: string
 }
 
@@ -42,16 +43,26 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
   patientName,
   patientPhone,
   onSelectReceiptType,
+  onGenerateReport,
   patientId
 }) => {
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false)
   const [showOperationsModal, setShowOperationsModal] = useState(false)
+  const [showReportOptions, setShowReportOptions] = useState(false)
   const [phoneNumber, setPhoneNumber] = useState(patientPhone || '')
   const [message, setMessage] = useState(`Receipt for ${patientName}`)
   const [operations, setOperations] = useState<Operation[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  
+  const [selectedReportTypes, setSelectedReportTypes] = useState<{ [key: string]: boolean }>({
+    cash: false,
+    prescription: true,
+    readingsandfindings: true,
+    readings: false,
+    clinical: false,
+    operation: false
+  })
+
   // Define type for standardized API response
   interface StandardizedResponse<T> {
     success: boolean
@@ -74,7 +85,7 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
         // Handle standardized response format
         const allOperationsResponse = await api.getOperations()
         console.log('All operations response:', allOperationsResponse)
-        
+
         // Check if response has the standardized format
         if (allOperationsResponse && typeof allOperationsResponse === 'object') {
           if ('success' in allOperationsResponse && 'data' in allOperationsResponse) {
@@ -82,8 +93,11 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
             if (allOperationsResponse.success && Array.isArray(allOperationsResponse.data)) {
               allOperations = allOperationsResponse.data
             } else {
-              console.warn('Operation response unsuccessful or data is not an array:', 
-                (allOperationsResponse as StandardizedResponse<Operation[]>).message || 'No message provided')
+              console.warn(
+                'Operation response unsuccessful or data is not an array:',
+                (allOperationsResponse as StandardizedResponse<Operation[]>).message ||
+                  'No message provided'
+              )
               allOperations = []
             }
           } else if (Array.isArray(allOperationsResponse)) {
@@ -96,7 +110,7 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
         } else {
           allOperations = []
         }
-        
+
         console.log('All operations fetched:', allOperations.length)
 
         // Log the first operation to see its structure
@@ -116,27 +130,36 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
         try {
           const patientOperationsResponse = await api.getPatientOperations(patientId)
           console.log('Patient operations response:', patientOperationsResponse)
-          
+
           let patientOperations: Operation[] = []
-          
+
           // Check if response has the standardized format
           if (patientOperationsResponse && typeof patientOperationsResponse === 'object') {
             if ('success' in patientOperationsResponse && 'data' in patientOperationsResponse) {
               // New standardized format
-              if (patientOperationsResponse.success && Array.isArray(patientOperationsResponse.data)) {
+              if (
+                patientOperationsResponse.success &&
+                Array.isArray(patientOperationsResponse.data)
+              ) {
                 patientOperations = patientOperationsResponse.data
               } else {
-                console.warn('Patient operation response unsuccessful or data is not an array:', 
-                  (patientOperationsResponse as StandardizedResponse<Operation[]>).message || 'No message provided')
+                console.warn(
+                  'Patient operation response unsuccessful or data is not an array:',
+                  (patientOperationsResponse as StandardizedResponse<Operation[]>).message ||
+                    'No message provided'
+                )
               }
             } else if (Array.isArray(patientOperationsResponse)) {
               // Legacy format (direct array)
               patientOperations = patientOperationsResponse
             } else {
-              console.warn('Unexpected patient operations response format:', patientOperationsResponse)
+              console.warn(
+                'Unexpected patient operations response format:',
+                patientOperationsResponse
+              )
             }
           }
-          
+
           console.log('Patient operations fetched:', patientOperations.length)
 
           if (patientOperations && patientOperations.length > 0) {
@@ -227,6 +250,51 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
       fetchOperations()
     }
   }, [showOperationsModal, fetchOperations])
+
+  // Toggle report options dropdown
+  const toggleReportOptions = (): void => {
+    setShowReportOptions(!showReportOptions)
+  }
+
+  // Handle checkbox change for report options
+  const handleReportTypeChange = (type: string): void => {
+    setSelectedReportTypes((prev) => ({
+      ...prev,
+      [type]: !prev[type]
+    }))
+  }
+
+  // Handle generating a report with selected receipt types
+  const handleGenerateReport = (): void => {
+    // Get selected receipt types from checkboxes
+    const receiptTypesToCheck = Object.entries(selectedReportTypes)
+      .filter(([, isSelected]) => isSelected)
+      .map(([type]) => type)
+
+    if (receiptTypesToCheck.length === 0) {
+      toast.error('Please select at least one receipt type')
+      return
+    }
+
+    // If onGenerateReport prop is provided, use it for multiple receipts
+    if (onGenerateReport) {
+      // Pass all selected receipt types to the parent component
+      onGenerateReport(receiptTypesToCheck)
+    } else {
+      // Fallback to the old behavior if onGenerateReport is not provided
+      // For each selected receipt type, trigger the appropriate receipt generation
+      receiptTypesToCheck.forEach((type) => {
+        if (type === 'operation' && operations.length > 0) {
+          // For operation receipts, use the first operation in the list
+          onSelectReceiptType(type, operations[0])
+        } else {
+          onSelectReceiptType(type)
+        }
+      })
+    }
+
+    setShowReportOptions(false) // Hide dropdown after generating
+  }
 
   // Handle operation selection
   const handleOperationSelect = (operation: Operation): void => {
@@ -329,11 +397,6 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
       console.error('Error generating PDF for preview:', error)
       toast.error('Failed to generate PDF preview. Please try again.')
     }
-  }
-
-  // Handle WhatsApp share
-  const handleWhatsAppShare = (): void => {
-    setShowWhatsAppModal(true)
   }
 
   // Helper to strip unsupported oklch() colors -> fallback #000
@@ -491,8 +554,6 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
 
       // Open WhatsApp in system app with chat to patient number and pre-filled message
       window.open(`whatsapp://send?phone=${patientPhone}&text=${encodedMessage}`, '_blank')
-
-      setShowWhatsAppModal(false)
     } catch (err) {
       console.error('Failed to create/send PDF:', err)
       toast.error('Failed to share via WhatsApp')
@@ -516,9 +577,15 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
         </button>
         <button
           className="px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200 transition-colors"
+          onClick={() => onSelectReceiptType('readingsandfindings')}
+        >
+          Readings & Findings
+        </button>
+        <button
+          className="px-3 py-1 text-sm bg-yellow-100 text-yellow-700 rounded-md hover:bg-yellow-200 transition-colors"
           onClick={() => onSelectReceiptType('readings')}
         >
-          Readings Receipt
+          Readings
         </button>
         <button
           className="px-3 py-1 text-sm bg-orange-100 text-orange-700 rounded-md hover:bg-orange-200 transition-colors"
@@ -532,6 +599,86 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
         >
           Clinical Findings
         </button>
+        <div className="relative">
+          <button
+            className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors"
+            onClick={toggleReportOptions}
+          >
+            Report
+          </button>
+
+          {showReportOptions && (
+            <div className="absolute right-0 mt-1 bg-white shadow-lg rounded-md p-3 z-10 border border-gray-200 w-48">
+              <h3 className="font-medium text-sm mb-2 text-gray-700">
+                Select receipts to include:
+              </h3>
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedReportTypes.cash}
+                    onChange={() => handleReportTypeChange('cash')}
+                    className="form-checkbox h-4 w-4 text-blue-600"
+                  />
+                  <span>Cash Receipt</span>
+                </label>
+                <label className="flex items-center space-x-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedReportTypes.prescription}
+                    onChange={() => handleReportTypeChange('prescription')}
+                    className="form-checkbox h-4 w-4 text-blue-600"
+                  />
+                  <span>Prescription Receipt</span>
+                </label>
+                <label className="flex items-center space-x-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedReportTypes.readingsandfindings}
+                    onChange={() => handleReportTypeChange('readingsandfindings')}
+                    className="form-checkbox h-4 w-4 text-blue-600"
+                  />
+                  <span>Readings & Findings</span>
+                </label>
+                <label className="flex items-center space-x-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedReportTypes.readings}
+                    onChange={() => handleReportTypeChange('readings')}
+                    className="form-checkbox h-4 w-4 text-blue-600"
+                  />
+                  <span>Readings</span>
+                </label>
+                <label className="flex items-center space-x-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedReportTypes.clinical}
+                    onChange={() => handleReportTypeChange('clinical')}
+                    className="form-checkbox h-4 w-4 text-blue-600"
+                  />
+                  <span>Clinical Findings</span>
+                </label>
+                <label className="flex items-center space-x-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedReportTypes.operation}
+                    onChange={() => handleReportTypeChange('operation')}
+                    className="form-checkbox h-4 w-4 text-blue-600"
+                  />
+                  <span>Operation Receipt</span>
+                </label>
+              </div>
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={handleGenerateReport}
+                  className="px-3 py-1 text-xs bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                >
+                  Generate
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {reportType && (
@@ -557,7 +704,7 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
             Print
           </button>
           <button
-            onClick={handleWhatsAppShare}
+            onClick={sendWhatsAppMessage}
             className="flex items-center gap-1 px-3 py-1 text-sm bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
           >
             <svg

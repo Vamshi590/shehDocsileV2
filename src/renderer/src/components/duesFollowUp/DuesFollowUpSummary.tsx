@@ -127,6 +127,9 @@ const DuesFollowUpSummary: React.FC<DuesFollowUpSummaryProps> = ({ onClick }) =>
 
         // Generate dates for today and the next 4 days (5 days total)
         const followUpDates: string[] = []
+        const yesterday = new Date()
+        yesterday.setDate(yesterday.getDate() - 1)
+        followUpDates.push(yesterday.toISOString().split('T')[0])
         for (let i = 0; i < 5; i++) {
           const date = new Date()
           date.setDate(date.getDate() + i)
