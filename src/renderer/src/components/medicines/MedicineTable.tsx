@@ -211,7 +211,24 @@ const MedicineTable: React.FC<MedicineTableProps> = ({
                     >
                       -
                     </button>
-                    <span className="text-sm font-medium">{quantities[medicine.id] || 0}</span>
+
+                    {/* Direct input field for quantity */}
+                    <input
+                      type="number"
+                      min="0"
+                      max={medicine.quantity}
+                      value={quantities[medicine.id] || 0}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value) || 0
+                        const validValue = Math.min(Math.max(0, value), medicine.quantity)
+                        setQuantities({
+                          ...quantities,
+                          [medicine.id]: validValue
+                        })
+                      }}
+                      className="w-12 text-center border border-gray-300 rounded py-1 px-1 text-sm"
+                    />
+
                     <button
                       onClick={() => {
                         const currentQty = quantities[medicine.id] || 0

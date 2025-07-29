@@ -1003,7 +1003,7 @@ const ReadingForm: React.FC<ReadingFormProps> = ({
 
       {/* Section 4: Subjective Refraction (SR) */}
       <div className="bg-gray-50 p-3 rounded-md">
-        <h3 className="text-md font-medium mb-2 flex items-center">Subjective Refraction</h3>
+        <h3 className="text-md font-medium mb-2 flex items-center">Present Glass Prescription</h3>
 
         {/* Right Eye - Distance */}
         <div className="mb-3">

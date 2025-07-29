@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 'use client'
 
 interface BusinessInfo {
@@ -18,6 +19,7 @@ interface PatientInfo {
   age: string
   address: string
   mobile: string
+  referredBy: string
   doctorName: string
   dept: string
 }
@@ -87,8 +89,8 @@ export default function OpticalReceipt({ data }: OpticalReceiptProps): React.Rea
         <h3 className="text-xs font-bold mb-3">PATIENT INFORMATION</h3>
         <div className="text-[11px] grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
           <div>
-            <div className="font-bold">BILL NO.</div>
-            <div>{patientInfo.billNumber}</div>
+            <div className="font-bold">PATIENT NAME</div>
+            <div>{patientInfo.patientName}</div>
           </div>
           <div>
             <div className="font-bold">PATIENT ID</div>
@@ -99,16 +101,16 @@ export default function OpticalReceipt({ data }: OpticalReceiptProps): React.Rea
             <div>{patientInfo.date}</div>
           </div>
           <div>
-            <div className="font-bold">PATIENT NAME</div>
-            <div>{patientInfo.patientName}</div>
+            <div className="font-bold">BILL NO.</div>
+            <div>{patientInfo.billNumber}</div>
           </div>
           <div>
             <div className="font-bold">GENDER</div>
             <div>{patientInfo.gender}</div>
           </div>
           <div>
-            <div className="font-bold">GUARDIAN NAME</div>
-            <div>{patientInfo.guardianName || ''}</div>
+            <div className="font-bold">REFERRED BY</div>
+            <div>{patientInfo.referredBy || ''}</div>
           </div>
           <div>
             <div className="font-bold">AGE</div>
@@ -235,8 +237,8 @@ export default function OpticalReceipt({ data }: OpticalReceiptProps): React.Rea
               <div className="flex-1 text-center font-bold text-xs">
                 {totals.advancePaid > 0
                   ? Math.round((totals.advancePaid % 1) * 100)
-                      .toString()
-                      .padStart(2, '0')
+                    .toString()
+                    .padStart(2, '0')
                   : '-'}
               </div>
             </div>
@@ -253,8 +255,8 @@ export default function OpticalReceipt({ data }: OpticalReceiptProps): React.Rea
               <div className="flex-1 text-center font-bold text-xs">
                 {totals.amtReceived > 0
                   ? Math.round((totals.amtReceived % 1) * 100)
-                      .toString()
-                      .padStart(2, '0')
+                    .toString()
+                    .padStart(2, '0')
                   : '-'}
               </div>
             </div>
@@ -271,8 +273,8 @@ export default function OpticalReceipt({ data }: OpticalReceiptProps): React.Rea
               <div className="flex-1 text-center font-bold text-xs">
                 {totals.discount > 0
                   ? Math.round((totals.discount % 1) * 100)
-                      .toString()
-                      .padStart(2, '0')
+                    .toString()
+                    .padStart(2, '0')
                   : '-'}
               </div>
             </div>

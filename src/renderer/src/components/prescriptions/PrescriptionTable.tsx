@@ -76,7 +76,7 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ prescriptions }) 
               scope="col"
               className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
             >
-              Guardian Name
+              Paid For
             </th>
             <th
               scope="col"
@@ -180,7 +180,7 @@ const PrescriptionTable: React.FC<PrescriptionTableProps> = ({ prescriptions }) 
                 {(prescription['PATIENT NAME'] as React.ReactNode) || '-'}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {(prescription['GUARDIAN NAME'] as React.ReactNode) || '-'}
+                {(prescription['PAID FOR'] as React.ReactNode) || '-'}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 {(prescription.DOB as React.ReactNode) || '-'}

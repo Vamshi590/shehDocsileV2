@@ -270,7 +270,7 @@ const Dashboard = (): React.JSX.Element => {
           )}
 
           {/* Labs Card */}
-          {(user?.data || user?.isAdmin) && (
+          {(user?.labs || user?.isAdmin) && (
             <div
               onClick={() => navigateTo('/labs')}
               className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 hover:shadow-md cursor-pointer transition-all transform hover:-translate-y-1 hover:border-indigo-100"

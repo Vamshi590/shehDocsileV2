@@ -100,6 +100,7 @@ const Opticals: React.FC = () => {
   const [selectedOpticals, setSelectedOpticals] = useState<SelectedOptical[]>([])
   const [totalAmount, setTotalAmount] = useState(0)
   const [loadingPatient, setLoadingPatient] = useState(false)
+  const [patientPrescriptions, setPatientPrescriptions] = useState<Record<string, unknown>[]>([])
 
   // Function to calculate total amount
   const calculateTotalAmount = useCallback((): void => {
@@ -158,7 +159,12 @@ const Opticals: React.FC = () => {
                 model: item.model || '',
                 size: item.size || '',
                 power: item.power,
-                quantity: typeof item.quantity === 'number' ? item.quantity : (item.quantity ? parseInt(String(item.quantity), 10) || 0 : 0),
+                quantity:
+                  typeof item.quantity === 'number'
+                    ? item.quantity
+                    : item.quantity
+                      ? parseInt(String(item.quantity), 10) || 0
+                      : 0,
                 price: typeof item.price === 'number' ? item.price : 0,
                 status: item.status || 'available'
               })) as Optical[]
@@ -598,6 +604,8 @@ const Opticals: React.FC = () => {
 
     try {
       setLoadingPatient(true)
+      // Clear previous prescriptions
+      setPatientPrescriptions([])
 
       // Define the expected response type for better type safety
       interface PatientResponse {
@@ -620,6 +628,11 @@ const Opticals: React.FC = () => {
       // Use type assertion for API calls
       const api = window.api as unknown as {
         getPatientById: (id: string) => Promise<PatientResponse>
+        getPrescriptionsByPatientId?: (id: string) => Promise<{
+          success: boolean
+          data?: Record<string, unknown>[]
+          message?: string
+        }>
       }
 
       // Get patient by ID with standardized response format
@@ -634,10 +647,54 @@ const Opticals: React.FC = () => {
         setPatient(patientData)
         setError('') // Clear any previous errors
         toast.success(`Patient ${patientData.name} found`)
+
+        // Try to fetch patient's prescriptions if the API method exists
+        if (api.getPrescriptionsByPatientId) {
+          try {
+            const prescriptionsResponse = await api.getPrescriptionsByPatientId(patientId)
+            console.log('Patient prescriptions response:', prescriptionsResponse)
+            if (
+              prescriptionsResponse &&
+              prescriptionsResponse.success &&
+              Array.isArray(prescriptionsResponse.data)
+            ) {
+              // Set the prescriptions
+              setPatientPrescriptions(prescriptionsResponse.data)
+            }
+          } catch (prescErr) {
+            console.error('Error fetching patient prescriptions:', prescErr)
+            // Don't show error toast for prescriptions to avoid confusion
+          }
+        } else {
+          // Fallback: Try to fetch all prescriptions and filter by patient ID
+          try {
+            // Check if window.api has getPrescriptions method
+            if ('getPrescriptions' in window.api) {
+              const allPrescriptions = await (
+                window.api as unknown as { getPrescriptions: () => unknown[] }
+              ).getPrescriptions()
+              console.log('All prescriptions:', allPrescriptions)
+              if (Array.isArray(allPrescriptions)) {
+                // Filter prescriptions by patient ID
+                const patientPrescriptions = allPrescriptions.filter((prescription: unknown) => {
+                  const p = prescription as Record<string, unknown>
+                  return p.patientId === patientId || p.PATIENT_ID === patientId
+                })
+                if (patientPrescriptions.length > 0) {
+                  setPatientPrescriptions(patientPrescriptions as Record<string, unknown>[])
+                }
+              }
+            }
+          } catch (prescErr) {
+            console.error('Error fetching all prescriptions:', prescErr)
+            // Don't show error toast for prescriptions to avoid confusion
+          }
+        }
       } else {
         // Handle case where patient was not found or response is invalid
         setPatientName('')
         setPatient({})
+        setPatientPrescriptions([])
         const errorMessage =
           response && typeof response.message === 'string' ? response.message : 'Patient not found'
         setError(errorMessage)
@@ -647,6 +704,7 @@ const Opticals: React.FC = () => {
       console.error('Error searching for patient:', err)
       setPatientName('')
       setPatient({})
+      setPatientPrescriptions([])
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       setError(`Failed to search for patient: ${errorMessage}`)
       toast.error(`Failed to search for patient: ${errorMessage}`)
@@ -665,6 +723,7 @@ const Opticals: React.FC = () => {
       const updatedOpticals = [...selectedOpticals]
       updatedOpticals[existingIndex].quantity += quantity
       setSelectedOpticals(updatedOpticals)
+      setSearchTerm('')
     } else {
       // Add new optical to the list
       setSelectedOpticals([
@@ -680,6 +739,7 @@ const Opticals: React.FC = () => {
           size: optical.size
         }
       ])
+      setSearchTerm('')
     }
 
     // Update the original optical's quantity in the main list
@@ -1006,10 +1066,17 @@ const Opticals: React.FC = () => {
 
     // Then apply search term filter if present
     if (searchTerm) {
-      return (
-        optical.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        optical.model.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+      const searchTermLower = searchTerm.toLowerCase()
+      const brandMatch =
+        optical.brand && typeof optical.brand === 'string'
+          ? optical.brand.toLowerCase().includes(searchTermLower)
+          : false
+      const modelMatch =
+        optical.model && typeof optical.model === 'string'
+          ? optical.model.toLowerCase().includes(searchTermLower)
+          : false
+
+      return brandMatch || modelMatch
     }
 
     return true
@@ -1099,55 +1166,12 @@ const Opticals: React.FC = () => {
             {error}
           </div>
         )}
-
-        {showAddForm && (
-          <div className="mb-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100 transition-all">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-medium text-gray-800 flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 mr-2 text-blue-500"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-                Add New Optical Item
-              </h2>
-              <button
-                onClick={() => setShowAddForm(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </button>
-            </div>
-            <OpticalForm onSubmit={handleAddOptical} />
-          </div>
-        )}
-
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
           {activeTab === 'inventory' ? (
             // Inventory Tab Content
             <>
               {showAddForm && (
-                <div className="bg-white shadow-sm rounded-lg p-6 mb-6">
+                <div className="bg-white border border-gray-100 shadow-sm rounded-lg p-6 mb-6">
                   <h2 className="text-lg font-medium text-gray-800 mb-4">Add New Optical Item</h2>
                   <OpticalForm onSubmit={handleAddOptical} onCancel={() => setShowAddForm(false)} />
                 </div>
@@ -1305,30 +1329,29 @@ const Opticals: React.FC = () => {
                       </>
                     )}
                   </div>
-                  <input
-                    type="text"
-                    placeholder="Search opticals..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex-grow"
-                  />
-                  <button
-                    onClick={handleSearch}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-r-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
+                  <div className="flex w-full sm:w-auto border border-gray-300 rounded-md">
+                    <input
+                      type="text"
+                      placeholder="Search opticals..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="px-4 py-2 focus:outline-none flex-grow"
+                    />
+                    <button onClick={handleSearch} className="px-4 py-2 text-black rounded-r-md">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
               {/* Dispensing Form */}
@@ -1419,11 +1442,278 @@ const Opticals: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Patient Prescriptions - Display when available */}
+                  {dispenseType === 'existing' && patientPrescriptions.length > 0 && (
+                    <div className="mb-6">
+                      <div className="p-4 rounded-md border border-blue-200">
+                        <h3 className="text-lg font-medium text-blue-800 mb-2">
+                          Latest Prescription
+                        </h3>
+                        {(() => {
+                          // Get the latest prescription (first in the array)
+                          const latestPrescription = patientPrescriptions[0] as Record<
+                            string,
+                            unknown
+                          >
+
+                          // Check if we have subjective refraction data
+                          const hasSRData = [
+                            'SR-RE-D-SPH',
+                            'SR-RE-D-CYL',
+                            'SR-RE-D-AXIS',
+                            'SR-RE-D-VA',
+                            'SR-LE-D-SPH',
+                            'SR-LE-D-CYL',
+                            'SR-LE-D-AXIS',
+                            'SR-LE-D-BCVA',
+                            'SR-RE-N-SPH',
+                            'SR-RE-N-CYL',
+                            'SR-RE-N-AXIS',
+                            'SR-RE-N-VA',
+                            'SR-LE-N-SPH',
+                            'SR-LE-N-CYL',
+                            'SR-LE-N-AXIS',
+                            'SR-LE-N-BCVA'
+                          ].some(
+                            (key) =>
+                              latestPrescription[key] || latestPrescription[key.toUpperCase()]
+                          )
+
+                          if (hasSRData) {
+                            return (
+                              <div className="overflow-x-auto">
+                                <table className="min-w-full border border-gray-300 rounded-md p-2 divide-y divide-gray-200">
+                                  <thead className="bg-blue-50">
+                                    <tr>
+                                      <th className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase tracking-wider"></th>
+                                      <th
+                                        colSpan={4}
+                                        className="px-3 py-2 text-center text-xs font-medium text-blue-800 uppercase tracking-wider"
+                                      >
+                                        Distance
+                                      </th>
+                                      <th
+                                        colSpan={4}
+                                        className="px-3 py-2 text-center text-xs font-medium text-blue-800 uppercase tracking-wider"
+                                      >
+                                        Near
+                                      </th>
+                                    </tr>
+                                    <tr>
+                                      <th className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase tracking-wider">
+                                        Eye
+                                      </th>
+                                      <th className="px-3 py-2 text-center text-xs font-medium text-blue-800 uppercase tracking-wider">
+                                        SPH
+                                      </th>
+                                      <th className="px-3 py-2 text-center text-xs font-medium text-blue-800 uppercase tracking-wider">
+                                        CYL
+                                      </th>
+                                      <th className="px-3 py-2 text-center text-xs font-medium text-blue-800 uppercase tracking-wider">
+                                        AXIS
+                                      </th>
+                                      <th className="px-3 py-2 text-center text-xs font-medium text-blue-800 uppercase tracking-wider">
+                                        VA/BCVA
+                                      </th>
+                                      <th className="px-3 py-2 text-center text-xs font-medium text-blue-800 uppercase tracking-wider">
+                                        SPH
+                                      </th>
+                                      <th className="px-3 py-2 text-center text-xs font-medium text-blue-800 uppercase tracking-wider">
+                                        CYL
+                                      </th>
+                                      <th className="px-3 py-2 text-center text-xs font-medium text-blue-800 uppercase tracking-wider">
+                                        AXIS
+                                      </th>
+                                      <th className="px-3 py-2 text-center text-xs font-medium text-blue-800 uppercase tracking-wider">
+                                        VA/BCVA
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white divide-y divide-gray-200">
+                                    {/* Right Eye (RE) */}
+                                    <tr>
+                                      <td className="px-3 py-2 text-sm font-medium text-gray-900">
+                                        Right Eye
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-RE-D-SPH'] ||
+                                            latestPrescription['SR-RE-D-SPH'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-RE-D-CYL'] ||
+                                            latestPrescription['SR-RE-D-CYL'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-RE-D-AXIS'] ||
+                                            latestPrescription['SR-RE-D-AXIS'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-RE-D-VA'] ||
+                                            latestPrescription['SR-RE-D-VA'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-RE-N-SPH'] ||
+                                            latestPrescription['SR-RE-N-SPH'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-RE-N-CYL'] ||
+                                            latestPrescription['SR-RE-N-CYL'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-RE-N-AXIS'] ||
+                                            latestPrescription['SR-RE-N-AXIS'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-RE-N-VA'] ||
+                                            latestPrescription['SR-RE-N-VA'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                    </tr>
+                                    {/* Left Eye (LE) */}
+                                    <tr>
+                                      <td className="px-3 py-2 text-sm font-medium text-gray-900">
+                                        Left Eye
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-LE-D-SPH'] ||
+                                            latestPrescription['SR-LE-D-SPH'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-LE-D-CYL'] ||
+                                            latestPrescription['SR-LE-D-CYL'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-LE-D-AXIS'] ||
+                                            latestPrescription['SR-LE-D-AXIS'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-LE-D-BCVA'] ||
+                                            latestPrescription['SR-LE-D-BCVA'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-LE-N-SPH'] ||
+                                            latestPrescription['SR-LE-N-SPH'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-LE-N-CYL'] ||
+                                            latestPrescription['SR-LE-N-CYL'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-LE-N-AXIS'] ||
+                                            latestPrescription['SR-LE-N-AXIS'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-sm text-center text-gray-900">
+                                        {String(
+                                          latestPrescription['SR-LE-N-BCVA'] ||
+                                            latestPrescription['SR-LE-N-BCVA'.toUpperCase()] ||
+                                            ''
+                                        )}
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                                {latestPrescription['PD'] ||
+                                latestPrescription['PD'.toUpperCase()] ? (
+                                  <div className="mt-2 text-sm text-gray-700 p-2">
+                                    <span className="font-medium">PD:</span>{' '}
+                                    {String(
+                                      latestPrescription['PD'] ||
+                                        latestPrescription['PD'.toUpperCase()] ||
+                                        ''
+                                    )}
+                                  </div>
+                                ) : null}
+                                {latestPrescription['ADVISED FOR'] ||
+                                latestPrescription['ADVISED FOR'.toUpperCase()] ? (
+                                  <div className="mt-2 text-sm text-gray-700">
+                                    <span className="font-medium">Advised For:</span>{' '}
+                                    {String(
+                                      latestPrescription['ADVISED FOR'] ||
+                                        latestPrescription['ADVISED FOR'.toUpperCase()] ||
+                                        ''
+                                    )}
+                                  </div>
+                                ) : null}
+                              </div>
+                            )
+                          } else {
+                            // Check for traditional prescription format
+                            const prescriptionText = String(
+                              latestPrescription.prescription ||
+                                latestPrescription.PRESCRIPTION ||
+                                ''
+                            )
+
+                            if (prescriptionText) {
+                              return (
+                                <div className="bg-blue-50 p-3 rounded">
+                                  <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                                    {prescriptionText}
+                                  </p>
+                                </div>
+                              )
+                            } else {
+                              return (
+                                <p className="text-sm text-gray-500">
+                                  No detailed prescription data available
+                                </p>
+                              )
+                            }
+                          }
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Selected Items for Dispensing */}
                   {selectedOpticals.length > 0 && (
-                    <div className="mb-6">
-                      <h4 className="text-md font-medium text-gray-700 mb-2">Selected Items</h4>
-                      <div className="bg-gray-50 rounded-md p-4 max-h-60 overflow-y-auto">
+                    <div className="mb-6 border border-gray-300 rounded-md p-2">
+                      <h4 className="text-lg font-medium text-gray-700 mb-2 p-2">Selected Items</h4>
+                      <div className="bg-gray-50 rounded-md p-4 max-h-60 overflow-y-auto border border-gray-300">
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead>
                             <tr>
@@ -1471,10 +1761,10 @@ const Opticals: React.FC = () => {
                                 <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
                                   ₹{optical.price * optical.quantity}
                                 </td>
-                                <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                                <td className="px-3 py-2 whitespace-nowrap cursor-pointer text-sm text-gray-900">
                                   <button
                                     onClick={() => removeOpticalFromDispense(optical.id)}
-                                    className="text-red-500 hover:text-red-700"
+                                    className="text-red-500 hover:text-red-700 cursor-pointer"
                                   >
                                     Remove
                                   </button>
@@ -1485,21 +1775,21 @@ const Opticals: React.FC = () => {
                         </table>
                       </div>
                       <div className="mt-4 flex justify-between items-center">
-                        <div className="text-lg font-medium">
+                        <div className="text-lg font-medium p-2">
                           Total Amount: <span className="text-blue-600">₹{totalAmount}</span>
                         </div>
                         <div className="space-x-2">
                           <button
                             onClick={() => handleSaveDispense(false)}
                             disabled={loading}
-                            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none"
+                            className="px-4 py-2 bg-blue-500 text-white cursor-pointer rounded-md hover:bg-blue-600 focus:outline-none"
                           >
                             {loading ? 'Processing...' : 'Save Dispense'}
                           </button>
                           <button
                             onClick={() => handleSaveDispense(true)}
                             disabled={loading}
-                            className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 focus:outline-none"
+                            className="px-4 py-2 bg-green-500 text-white cursor-pointer rounded-md hover:bg-green-600 focus:outline-none"
                           >
                             {loading ? 'Processing...' : 'Save & Print'}
                           </button>
@@ -1681,6 +1971,7 @@ const Opticals: React.FC = () => {
                   mobile: patient['phone'] || '', // Not available in current context
                   doctorName: patient['doctorName'] || '',
                   guardianName: patient['guardian'] || '',
+                  referredBy: patient['referredBy'] || '',
                   dept: patient['department'] || ''
                 },
                 items: selectedOpticals.map((optical) => ({

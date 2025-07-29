@@ -256,22 +256,72 @@ const PatientForm: React.FC<PatientFormProps> = ({
     if (name === 'dob') {
       const birthDate = new Date(value)
       const today = new Date()
-      let age = today.getFullYear() - birthDate.getFullYear()
-      const monthDiff = today.getMonth() - birthDate.getMonth()
 
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--
+      // Calculate difference in milliseconds
+      const diffTime = today.getTime() - birthDate.getTime()
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+      // Calculate years, months, and days
+      let years = today.getFullYear() - birthDate.getFullYear()
+      let months = today.getMonth() - birthDate.getMonth()
+
+      // Adjust years and months if needed
+      if (months < 0 || (months === 0 && today.getDate() < birthDate.getDate())) {
+        years--
+        months += 12
+      }
+
+      // Adjust for day of month
+      if (today.getDate() < birthDate.getDate()) {
+        months--
+      }
+
+      // Format age as appropriate
+      let ageValue: string | number = years
+
+      if (years === 0) {
+        if (months > 0) {
+          ageValue = `${months} months`
+        } else {
+          ageValue = `${diffDays} days`
+        }
       }
 
       setFormData({
         ...formData,
         [name]: value,
-        age: age
+        age: ageValue
       })
+    }
+    // Calculate DOB if age changes
+    else if (name === 'age') {
+      // Check if the input contains only digits (a simple age in years)
+      const isNumericAge = /^\d+$/.test(value)
+
+      if (isNumericAge) {
+        const ageValue = parseInt(value) || 0
+        const today = new Date()
+        const birthYear = today.getFullYear() - ageValue
+        // Set to January 1st of the calculated birth year
+        const dob = `${birthYear}-01-01`
+
+        setFormData({
+          ...formData,
+          [name]: value, // Keep as string for display
+          dob: dob
+        })
+      } else {
+        // For text inputs like "3 months" or "15 days", just store the value
+        // but don't try to calculate DOB
+        setFormData({
+          ...formData,
+          [name]: value
+        })
+      }
     } else {
       setFormData({
         ...formData,
-        [name]: name === 'age' ? parseInt(value) || 0 : value
+        [name]: value
       })
     }
   }
@@ -391,10 +441,23 @@ const PatientForm: React.FC<PatientFormProps> = ({
         return
       }
 
+      // If we're in existing patient mode with a found patient, directly create a cash receipt
+      if (isExistingPatientMode && searchedPatient) {
+        // Create a patient object from the searched patient
+        const patientData = searchedPatient
+
+        // Call onCreateReceipt to show the cash receipt form
+        if (onCreateReceipt) {
+          onCreateReceipt(patientData)
+          return // Exit early as we're just creating a receipt, not saving patient data
+        }
+      }
+
+      // For new patients or updates, proceed with normal flow
       // Prepare submission data
       let submissionData: ExtendedFormData = { ...formData }
 
-      // For existing patients, preserve the ID to update the existing record
+      // For existing patients being updated, preserve the ID to update the existing record
       if (isExistingPatientMode && searchedPatient) {
         submissionData = {
           ...submissionData,
@@ -404,7 +467,6 @@ const PatientForm: React.FC<PatientFormProps> = ({
           updatedBy: getCurrentUser(),
           updatedAt: new Date().toISOString()
         }
-        // Note: We're keeping the ID to update the existing record
       }
 
       // Submit the form data and get the updated/new patient
@@ -416,8 +478,8 @@ const PatientForm: React.FC<PatientFormProps> = ({
           ? (result as unknown as Patient)
           : ({ ...submissionData, id: submissionData.id || String(Date.now()) } as Patient)
 
-      // Call onCreateReceipt if provided
-      if (onCreateReceipt && patientData) {
+      // Call onCreateReceipt if provided (for new patients)
+      if (onCreateReceipt && patientData && !isExistingPatientMode) {
         onCreateReceipt(patientData)
       }
 
@@ -470,7 +532,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
           {error}
         </div>
       )}
-      <div className="bg-gray-50 p-4 rounded-md">
+      <div className="bg-gray-50 p-4 rounded-md border border-gray-200 mb-4">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-medium text-gray-900">Patient Information</h3>
           <p
@@ -498,7 +560,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
                   value={searchPatientId}
                   onChange={(e) => setSearchPatientId(e.target.value)}
                   placeholder="Enter Patient ID (e.g., 0001)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 bg-white rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                   onKeyPress={(e) => {
                     if (e.key === 'Enter') {
                       handleSearchPatient()
@@ -533,7 +595,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
               name="date"
               value={formData.date}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-500"
+              className="w-full px-3 py-2 border border-gray-300 bg-white rounded focus:outline-none focus:ring-1 focus:ring-gray-500"
               required
             />
           </div>
@@ -548,7 +610,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
               name="patientId"
               value={formData.patientId}
               onChange={handleChange}
-              className={`w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
+              className={`w-full px-3 py-2 border border-gray-300 bg-white rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
                 (!initialValues && !isExistingPatientMode) ||
                 (isExistingPatientMode && searchedPatient)
                   ? 'bg-gray-50'
@@ -572,7 +634,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
               name="name"
               value={formData.name}
               onChange={handleChange}
-              className={`w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
+              className={`w-full px-3 py-2 border border-gray-300 bg-white rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
                 isExistingPatientMode && !!searchedPatient ? 'bg-gray-50' : ''
               }`}
               readOnly={isExistingPatientMode && !!searchedPatient}
@@ -590,7 +652,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
               name="guardian"
               value={formData.guardian}
               onChange={handleChange}
-              className={`w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
+              className={`w-full px-3 py-2 border border-gray-300 bg-white rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
                 isExistingPatientMode && !!searchedPatient ? 'bg-gray-50' : ''
               }`}
               readOnly={isExistingPatientMode && !!searchedPatient}
@@ -607,7 +669,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
               name="dob"
               value={formData.dob}
               onChange={handleChange}
-              className={`w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
+              className={`w-full px-3 py-2 border border-gray-300 bg-white rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
                 isExistingPatientMode && !!searchedPatient ? 'bg-gray-50' : ''
               }`}
               readOnly={isExistingPatientMode && !!searchedPatient}
@@ -620,13 +682,13 @@ const PatientForm: React.FC<PatientFormProps> = ({
               Age
             </label>
             <input
-              type="number"
+              type="text"
               id="age"
               name="age"
               value={formData.age}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-500"
-              readOnly
+              className="w-full px-3 py-2 border border-gray-300 bg-white rounded focus:outline-none focus:ring-1 focus:ring-gray-500"
+              readOnly={isExistingPatientMode && !!searchedPatient}
             />
           </div>
 
@@ -639,7 +701,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
               name="gender"
               value={formData.gender}
               onChange={handleChange}
-              className={`w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
+              className={`w-full px-3 py-2 border border-gray-300 bg-white rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
                 isExistingPatientMode && !!searchedPatient ? 'bg-gray-50' : ''
               }`}
               disabled={isExistingPatientMode && !!searchedPatient}
@@ -661,7 +723,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
               name="status"
               value={formData.status}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-500"
+              className="w-full px-3 py-2 border border-gray-300 bg-white rounded focus:outline-none focus:ring-1 focus:ring-gray-500"
               required
             >
               <option value="">Select Status</option>
@@ -683,7 +745,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
               name="phone"
               value={formData.phone}
               onChange={handleChange}
-              className={`w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
+              className={`w-full px-3 py-2 border border-gray-300 bg-white rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
                 isExistingPatientMode && !!searchedPatient ? 'bg-gray-50' : ''
               }`}
               readOnly={isExistingPatientMode && !!searchedPatient}
@@ -701,7 +763,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
               name="address"
               value={formData.address}
               onChange={handleChange}
-              className={`w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
+              className={`w-full px-3 py-2 border border-gray-300 bg-white rounded focus:outline-none focus:ring-1 focus:ring-gray-500 ${
                 isExistingPatientMode && !!searchedPatient ? 'bg-gray-50' : ''
               }`}
               readOnly={isExistingPatientMode && !!searchedPatient}
@@ -711,7 +773,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
         </div>
       </div>
 
-      <div className="bg-gray-50 p-4 rounded-md">
+      <div className="bg-gray-50 p-4 rounded-md border border-gray-300">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Doctor Information</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
@@ -726,6 +788,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
               onChange={handleChange}
               onAddNewOption={addNewOptionPermanently}
               placeholder="Select or type doctor name..."
+              className="bg-white"
               required
             />
           </div>
@@ -742,6 +805,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
               onChange={handleChange}
               onAddNewOption={addNewOptionPermanently}
               placeholder="Select or type department..."
+              className="bg-white"
             />
           </div>
 
@@ -757,6 +821,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
               onChange={handleChange}
               onAddNewOption={addNewOptionPermanently}
               placeholder="Select or type referrer..."
+              className="bg-white"
             />
           </div>
         </div>
@@ -765,9 +830,13 @@ const PatientForm: React.FC<PatientFormProps> = ({
       <div className="mt-6 flex justify-end">
         <button
           type="submit"
-          className="px-4 py-2 bg-blue-500 cursor-pointer hover:bg-blue-600 text-white font-medium rounded focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-50"
+          className={`px-4 py-2 cursor-pointer text-white font-medium rounded focus:outline-none focus:ring-2 focus:ring-opacity-50 ${isExistingPatientMode && searchedPatient ? 'bg-green-500 hover:bg-green-600 focus:ring-green-400' : 'bg-blue-500 hover:bg-blue-600 focus:ring-blue-400'}`}
         >
-          {initialValues ? 'Update Patient' : 'Add Patient'}
+          {initialValues
+            ? 'Update Patient'
+            : isExistingPatientMode && searchedPatient
+              ? 'Add Cash Receipt'
+              : 'Add Patient'}
         </button>
       </div>
     </form>

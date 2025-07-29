@@ -121,6 +121,8 @@ export interface AnalyticsData {
     medicines: number
     opticals: number
     operations: number
+    labs: number
+    vlabs: number
     pending: number
     trend?: 'increasing' | 'decreasing' | 'stable'
   }

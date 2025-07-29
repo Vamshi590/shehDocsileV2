@@ -81,6 +81,11 @@ interface API {
     data: Record<string, unknown>
     message: string
   }>
+  getPrescriptionsByPatientId?: (patientId: string) => Promise<{
+    success: boolean
+    data: Record<string, unknown>[]
+    message: string
+  }>
   // Add other API methods as needed
 }
 
@@ -171,6 +176,7 @@ const Medicines: React.FC = () => {
   const [totalAmount, setTotalAmount] = useState(0)
   const [loadingPatient, setLoadingPatient] = useState(false)
   const [patient, setPatient] = useState({})
+  const [patientPrescriptions, setPatientPrescriptions] = useState<Record<string, unknown>[]>([])
 
   // Function to calculate total amount
   const calculateTotalAmount = useCallback((): void => {
@@ -194,6 +200,7 @@ const Medicines: React.FC = () => {
         console.log('Initial medicines load response:', response)
         if (response && response.success && response.data) {
           setMedicines(response.data as unknown as Medicine[])
+          console.log('Medicines loaded successfully:', medicines)
           setError('')
         } else {
           setError(response?.message || 'Failed to load medicines')
@@ -337,8 +344,23 @@ const Medicines: React.FC = () => {
       // Use type assertion for API calls with more specific types
       const api = window.api as unknown as API
 
+      // If quantity is updated and greater than 0, automatically set status to Available
+      const medicineToUpdate = { ...medicine }
+
+      // Check if we're updating quantity and it's greater than 0
+      const currentMedicine = medicines.find((m) => m.id === id)
+      const isQuantityUpdated =
+        currentMedicine && Number(medicineToUpdate.quantity) !== Number(currentMedicine.quantity)
+
+      if (isQuantityUpdated && Number(medicineToUpdate.quantity) > 0) {
+        medicineToUpdate.status = 'available'
+      }
+
       // Call the API with standardized response format
-      const response = await api.updateMedicine(id, { ...medicine, id } as Record<string, unknown>)
+      const response = await api.updateMedicine(id, { ...medicineToUpdate, id } as Record<
+        string,
+        unknown
+      >)
       console.log('Medicine update response:', response)
 
       if (response && response.success && response.data) {
@@ -414,17 +436,55 @@ const Medicines: React.FC = () => {
       // Use type assertion for API calls with more specific types
       const api = window.api as unknown as API
 
-      // Call the API with standardized response format
-      const response = await api.updateMedicineStatus(id, status)
+      // Find the medicine to check its quantity before updating status
+      const medicine = medicines.find((m) => m.id === id)
+
+      // Validate status against quantity to maintain consistency
+      let finalStatus = status
+      if (medicine) {
+        // If quantity > 0 but trying to set status to 'out_of_stock', warn user and keep 'available'
+        if (medicine.quantity > 0 && status === 'out_of_stock') {
+          toast.warning(
+            `Medicine has ${medicine.quantity} units in stock. Cannot mark as out of stock.`
+          )
+          finalStatus = 'available'
+        }
+        // If quantity <= 0 but trying to set status to 'available', warn user and keep 'out_of_stock'
+        else if (medicine.quantity <= 0 && status === 'available') {
+          toast.warning(`Medicine has no units in stock. Cannot mark as available.`)
+          finalStatus = 'out_of_stock'
+        }
+      }
+
+      // Call the API with standardized response format and validated status
+      const response = await api.updateMedicineStatus(id, finalStatus)
       console.log('Medicine status update response:', response)
 
       if (response && response.success && response.data) {
         // Update medicine in the state with the returned data
         const updatedMedicine = response.data as unknown as Medicine
-        setMedicines(medicines.map((m) => (m.id === id ? updatedMedicine : m)))
+
+        // Ensure the returned medicine also has consistent status and quantity
+        const newStatus: 'available' | 'out_of_stock' =
+          updatedMedicine.quantity > 0 ? 'available' : 'out_of_stock'
+        const consistentMedicine = {
+          ...updatedMedicine,
+          status: newStatus
+        }
+
+        setMedicines(medicines.map((m) => (m.id === id ? consistentMedicine : m)))
         setError('')
+
         // Show success toast with custom message if provided
-        toast.success(response.message || `Medicine status updated to ${status.replace('_', ' ')}`)
+        if (finalStatus !== status) {
+          toast.info(
+            `Medicine status automatically set to ${finalStatus.replace('_', ' ')} based on quantity`
+          )
+        } else {
+          toast.success(
+            response.message || `Medicine status updated to ${finalStatus.replace('_', ' ')}`
+          )
+        }
       } else {
         // Show error toast with the error message from the response
         setError(response?.message || 'Failed to update medicine status')
@@ -523,18 +583,8 @@ const Medicines: React.FC = () => {
       console.log(`Medicine filter response (${status}):`, response)
 
       if (response && response.success && Array.isArray(response.data)) {
-        // Validate and sanitize each medicine object before updating state
-        const validMedicines = response.data
-          .filter((item) => item && typeof item === 'object')
-          .map((item) => ({
-            id: item.id || '',
-            name: item.name || '',
-            quantity: typeof item.quantity === 'number' ? item.quantity : 0,
-            expiryDate: item.expiryDate || '',
-            batchNumber: item.batchNumber || '',
-            price: typeof item.price === 'number' ? item.price : 0,
-            status: item.status || 'available'
-          })) as Medicine[]
+        // Validate and sanitize each medicine object before updating status
+        const validMedicines = response.data as unknown as Medicine[]
 
         setMedicines(validMedicines)
         setError('')
@@ -642,6 +692,8 @@ const Medicines: React.FC = () => {
 
     try {
       setLoadingPatient(true)
+      // Clear previous prescriptions
+      setPatientPrescriptions([])
       // Use type assertion for API calls with more specific types
       const api = window.api as unknown as API
 
@@ -662,10 +714,53 @@ const Medicines: React.FC = () => {
         setPatientName(String(patient.name || patient.NAME || ''))
         setPatient(patient)
         toast.success('Patient found')
+        // Try to fetch patient's prescriptions if the API method exists
+        if (api.getPrescriptionsByPatientId) {
+          try {
+            const prescriptionsResponse = await api.getPrescriptionsByPatientId(patientId)
+            console.log('Patient prescriptions response:', prescriptionsResponse)
+            if (
+              prescriptionsResponse &&
+              prescriptionsResponse.success &&
+              Array.isArray(prescriptionsResponse.data)
+            ) {
+              // Get the latest prescription (first in the array)
+              setPatientPrescriptions(prescriptionsResponse.data)
+            }
+          } catch (prescErr) {
+            console.error('Error fetching patient prescriptions:', prescErr)
+            // Don't show error toast for prescriptions to avoid confusion
+          }
+        } else {
+          // Fallback: Try to fetch all prescriptions and filter by patient ID
+          try {
+            // Check if window.api has getPrescriptions method
+            if ('getPrescriptions' in window.api) {
+              const allPrescriptions = await (
+                window.api as unknown as { getPrescriptions: () => unknown[] }
+              ).getPrescriptions()
+              console.log('All prescriptions:', allPrescriptions)
+              if (Array.isArray(allPrescriptions)) {
+                // Filter prescriptions by patient ID
+                const patientPrescriptions = allPrescriptions.filter((prescription: unknown) => {
+                  const p = prescription as Record<string, unknown>
+                  return p.patientId === patientId || p.PATIENT_ID === patientId
+                })
+                if (patientPrescriptions.length > 0) {
+                  setPatientPrescriptions(patientPrescriptions as Record<string, unknown>[])
+                }
+              }
+            }
+          } catch (prescErr) {
+            console.error('Error fetching all prescriptions:', prescErr)
+            // Don't show error toast for prescriptions to avoid confusion
+          }
+        }
       } else {
         // Handle case where patient is not found or response is invalid
         setPatientName('')
         setPatient({} as Record<string, unknown>)
+        setPatientPrescriptions([])
         toast.error(response?.message || 'Patient not found')
       }
     } catch (err) {
@@ -675,6 +770,7 @@ const Medicines: React.FC = () => {
       )
       setPatientName('')
       setPatient({} as Record<string, unknown>)
+      setPatientPrescriptions([])
     } finally {
       setLoadingPatient(false)
     }
@@ -692,6 +788,7 @@ const Medicines: React.FC = () => {
       const updatedMedicines = [...selectedMedicines]
       updatedMedicines[existingIndex].quantity = quantity
       setSelectedMedicines(updatedMedicines)
+      setSearchTerm('')
     } else {
       // Add new medicine to the list
       setSelectedMedicines([
@@ -705,6 +802,7 @@ const Medicines: React.FC = () => {
           expiryDate: medicine.expiryDate
         }
       ])
+      setSearchTerm('')
     }
 
     // Update the available quantity in the medicines list
@@ -717,7 +815,7 @@ const Medicines: React.FC = () => {
           return {
             ...m,
             quantity: newQuantity,
-            // If quantity becomes 0, update status to out_of_stock
+            // If quantity becomes 0 or less, update status to out_of_stock
             status: newQuantity <= 0 ? 'out_of_stock' : m.status
           }
         }
@@ -738,6 +836,13 @@ const Medicines: React.FC = () => {
   // Function to toggle dispense dropdown
   const toggleDispenseDropdown = (): void => {
     setShowDispenseDropdown(!showDispenseDropdown)
+    setPatientPrescriptions([])
+    setPatient({})
+    setPatientId('')
+    setPatientName('')
+    setDispensedBy('')
+    setTotalAmount(0)
+    setSelectedMedicines([])
 
     // Close the form if dropdown is closed
     if (showDispenseForm && !showDispenseDropdown) {
@@ -831,6 +936,8 @@ const Medicines: React.FC = () => {
       setPatientId('')
       setPatientName('')
       setDispensedBy('')
+      setSearchTerm('')
+      setPatientPrescriptions([])
       setPatient({})
 
       // If shouldPrint is true, print the receipt
@@ -1228,18 +1335,15 @@ const Medicines: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="flex w-full sm:w-auto">
+                  <div className="flex w-full sm:w-auto border border-gray-300 rounded-md">
                     <input
                       type="text"
                       placeholder="Search medicines..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex-grow"
+                      className="px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex-grow"
                     />
-                    <button
-                      onClick={handleSearch}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-r-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    >
+                    <button onClick={handleSearch} className="px-4 py-2 text-black rounded-r-md">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         className="h-5 w-5"
@@ -1333,6 +1437,145 @@ const Medicines: React.FC = () => {
                             placeholder="Auto-filled after patient search"
                           />
                         </div>
+
+                        {/* Dispensed By - For both types */}
+                        <div>
+                          <label
+                            htmlFor="dispensedBy"
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                          >
+                            Dispensed By
+                          </label>
+                          <input
+                            type="text"
+                            id="dispensedBy"
+                            value={dispensedBy}
+                            onChange={(e) => setDispensedBy(e.target.value)}
+                            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
+                            placeholder="Enter dispenser name"
+                          />
+                        </div>
+
+                        {/* Patient Prescriptions - Display when available */}
+                        {patientPrescriptions.length > 0 && (
+                          <div className="col-span-3">
+                            <div className="mt-4 p-4 rounded-md border border-blue-200">
+                              <h3 className="text-lg font-medium text-blue-800 mb-2">
+                                Latest Prescriptions
+                              </h3>
+                              <div className="overflow-x-auto border border-gray-200 rounded-md">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                  <thead className="bg-blue-100">
+                                    <tr>
+                                      <th
+                                        scope="col"
+                                        className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase tracking-wider"
+                                      >
+                                        Prescription
+                                      </th>
+                                      <th
+                                        scope="col"
+                                        className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase tracking-wider"
+                                      >
+                                        Days
+                                      </th>
+                                      <th
+                                        scope="col"
+                                        className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase tracking-wider"
+                                      >
+                                        Timing
+                                      </th>
+                                      <th
+                                        scope="col"
+                                        className="px-3 py-2 text-left text-xs font-medium text-blue-800 uppercase tracking-wider"
+                                      >
+                                        Date
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white divide-y divide-gray-200">
+                                    {patientPrescriptions.length > 0 &&
+                                      (() => {
+                                        // Get the latest prescription (first in the array)
+                                        const latestPrescription =
+                                          patientPrescriptions[0] as Record<string, unknown>
+                                        const date = String(
+                                          latestPrescription.date || latestPrescription.DATE || ''
+                                        )
+
+                                        // Extract all medicines from the prescription
+                                        const medicines: Array<{
+                                          medicine: string
+                                          days: string
+                                          timing: string
+                                        }> = []
+
+                                        // Check for numbered prescription fields (PRESCRIPTION 1, PRESCRIPTION 2, etc.)
+                                        for (let i = 1; i <= 10; i++) {
+                                          const medicineKey = `PRESCRIPTION ${i}`
+                                          const daysKey = `DAYS ${i}`
+                                          const timingKey = `TIMING ${i}`
+
+                                          if (latestPrescription[medicineKey]) {
+                                            medicines.push({
+                                              medicine: String(
+                                                latestPrescription[medicineKey] || ''
+                                              ),
+                                              days: String(latestPrescription[daysKey] || ''),
+                                              timing: String(latestPrescription[timingKey] || '')
+                                            })
+                                          }
+                                        }
+
+                                        // If no numbered fields found, check for legacy format
+                                        if (medicines.length === 0) {
+                                          const prescriptionText = String(
+                                            latestPrescription.prescription ||
+                                              latestPrescription.PRESCRIPTION ||
+                                              ''
+                                          )
+                                          const days = String(
+                                            latestPrescription.days || latestPrescription.DAYS || ''
+                                          )
+                                          const timing = String(
+                                            latestPrescription.timing ||
+                                              latestPrescription.TIMING ||
+                                              ''
+                                          )
+
+                                          if (prescriptionText) {
+                                            medicines.push({
+                                              medicine: prescriptionText,
+                                              days,
+                                              timing
+                                            })
+                                          }
+                                        }
+
+                                        // Return the rows for each medicine
+                                        return medicines.map((item, idx) => (
+                                          <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : ''}>
+                                            <td className="px-3 py-2 whitespace-normal text-sm text-gray-900">
+                                              {item.medicine}
+                                            </td>
+                                            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                                              {item.days}
+                                            </td>
+                                            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                                              {item.timing}
+                                            </td>
+                                            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                                              {date}
+                                            </td>
+                                          </tr>
+                                        ))
+                                      })()}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </>
                     ) : (
                       <>
@@ -1373,33 +1616,35 @@ const Medicines: React.FC = () => {
                             placeholder="Enter doctor name (optional)"
                           />
                         </div>
+
+                        {/* Dispensed By - For both types */}
+                        <div>
+                          <label
+                            htmlFor="dispensedBy"
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                          >
+                            Dispensed By
+                          </label>
+                          <input
+                            type="text"
+                            id="dispensedBy"
+                            value={dispensedBy}
+                            onChange={(e) => setDispensedBy(e.target.value)}
+                            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
+                            placeholder="Enter dispenser name"
+                          />
+                        </div>
                       </>
                     )}
-
-                    {/* Dispensed By - For both types */}
-                    <div>
-                      <label
-                        htmlFor="dispensedBy"
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                      >
-                        Dispensed By
-                      </label>
-                      <input
-                        type="text"
-                        id="dispensedBy"
-                        value={dispensedBy}
-                        onChange={(e) => setDispensedBy(e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
-                        placeholder="Enter dispenser name"
-                      />
-                    </div>
                   </div>
 
                   {/* Selected Medicines */}
-                  <div className="mb-4">
-                    <h4 className="text-md font-medium text-gray-800 mb-2">Selected Medicines</h4>
+                  <div className="mb-4 border border-gray-200 rounded-md">
+                    <h4 className="text-lg font-medium text-gray-800 mb-2 p-2">
+                      Selected Medicines
+                    </h4>
                     {selectedMedicines.length > 0 ? (
-                      <div className="overflow-x-auto">
+                      <div className="overflow-x-auto p-2">
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-gray-50">
                             <tr>
@@ -1476,7 +1721,7 @@ const Medicines: React.FC = () => {
                         </table>
                       </div>
                     ) : (
-                      <div className="text-sm text-gray-500 italic">
+                      <div className="text-sm text-gray-500 italic p-2">
                         No medicines selected. Add medicines from the table below.
                       </div>
                     )}
@@ -1737,6 +1982,7 @@ const Medicines: React.FC = () => {
                   date: new Date().toLocaleDateString(),
                   gender: patient['gender'] || '',
                   age: patient['age'] || 0,
+                  refferedBy: patient['referredBy'] || '',
                   mobile: patient['phone'] || '',
                   dept: patient['department'] || '',
                   doctorName: patient['doctorName'] || ''

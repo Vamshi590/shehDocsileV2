@@ -95,6 +95,7 @@ interface EyeReceiptProps {
   pd?: string
   clinicalFindings?: ClinicalFindingsData
   lensType?: string
+  sighttype?: string
 }
 
 export default function EyeReceipt({
@@ -102,6 +103,7 @@ export default function EyeReceipt({
   previousGlassPrescription,
   subjectiveRefraction,
   pd,
+  sighttype,
   clinicalFindings,
   lensType = ''
 }: EyeReceiptProps): React.ReactElement {
@@ -160,7 +162,7 @@ export default function EyeReceipt({
         {/* AR Reading Section */}
 
         <div className="pb-2 mb-2">
-          <h3 className="text-sm font-bold mb-2 text-center">AR READING {pd && `(PD: ${pd} mm)`}</h3>
+          <h3 className="text-sm font-bold mb-1 text-center">AR READING {pd && `(PD: ${pd} mm)`}</h3>
           <table className="w-full border-collapse text-xs mb-3">
             <thead>
               <tr>
@@ -212,7 +214,7 @@ export default function EyeReceipt({
         </div>
 
         <div className="pb-2 mb-2">
-          <h3 className="text-sm font-bold mb-2 text-center">PREVIOUS GLASS PRESCRIPTION</h3>
+          <h3 className="text-sm font-bold mb-1 text-center">PREVIOUS GLASS PRESCRIPTION</h3>
           <table className="w-full border-collapse text-xs mb-3">
             <thead>
               <tr>
@@ -298,7 +300,7 @@ export default function EyeReceipt({
         {/* Subjective Refraction Section */}
 
         <div className="pb-2 mb-2 border-b-2 border-[#000000]">
-          <h3 className="text-sm font-bold mb-2 text-center">PRESENT GLASS PRESCRIPTION</h3>
+          <h3 className="text-sm font-bold mb-1 text-center">PRESENT GLASS PRESCRIPTION {sighttype ? `(${sighttype})` : ''}</h3>
           <table className="w-full border-collapse text-xs mb-3">
             <thead>
               <tr>
@@ -384,7 +386,7 @@ export default function EyeReceipt({
 
         {/* Clinical Findings Section */}
         <div className="pb-2 mb-2">
-          <div className='flex justify-between items-center mb-6'>
+          <div className='flex justify-between items-center mb-2'>
             <img className='w-16 h-16' src={cliniseye} alt="" />
           <h3 className="text-sm font-bold mb-2 text-center">CLINICAL FINDINGS</h3>
           <img className='w-16 h-16' src={cliniseye} alt="" />
@@ -392,10 +394,10 @@ export default function EyeReceipt({
           </div>
 
           {/* Eye Examination Section */}
-          <div className="flex justify-between mb-3 pl-12">     
+          <div className="flex justify-between mb-2 pl-12">     
             {/* Right Eye */}
             <div className="w-[48%]">
-              <div className="text-center mb-4">
+              <div className="text-center mb-2">
                 <p className="text-xs font-bold">Right Eye</p>
               </div>
               <div className="p-1 mb-2">
@@ -487,7 +489,7 @@ export default function EyeReceipt({
             </div>
             {/* Left Eye */}
             <div className="w-[48%]">
-              <div className="text-center mb-4">
+              <div className="text-center mb-2">
                 <p className="text-xs font-bold">Left Eye</p>
               </div>
               <div className="p-1 mb-2">

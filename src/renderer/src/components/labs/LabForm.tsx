@@ -214,11 +214,14 @@ const LabForm: React.FC<LabFormProps> = ({
   ): void => {
     const { name, value } = e.target
 
+    // For number inputs, preserve the exact value entered by the user
+    const processedValue = e.target.type === 'number' ? value : value
+
     // Update the form data
     setFormData((prevData) => {
-      const updatedData = { ...prevData, [name]: value }
+      const updatedData = { ...prevData, [name]: processedValue }
 
-      // If this is an amount field, recalculate total
+      // If this is an amount field, recalculate total without modifying the current field
       if (name.startsWith('AMOUNT ')) {
         let total = 0
         // Sum all amount fields
@@ -226,35 +229,37 @@ const LabForm: React.FC<LabFormProps> = ({
           const amountKey = `AMOUNT ${i}`
           const amountValue = updatedData[amountKey]
           if (amountValue && !isNaN(Number(amountValue))) {
-            total += Number(amountValue)
+            // Use parseFloat to avoid rounding issues
+            total += parseFloat(Number(amountValue).toFixed(2))
           }
         }
 
-        // Update total amount
-        updatedData['TOTAL AMOUNT'] = total
+        // Update total amount - use toFixed(2) to avoid floating point precision issues
+        // but store as number by using parseFloat
+        updatedData['TOTAL AMOUNT'] = parseFloat(total.toFixed(2))
 
         // Recalculate amount due
         const discount = updatedData['DISCOUNT PERCENTAGE']
-          ? (total * Number(updatedData['DISCOUNT PERCENTAGE'])) / 100
+          ? parseFloat(((total * Number(updatedData['DISCOUNT PERCENTAGE'])) / 100).toFixed(2))
           : 0
         const amountReceived = updatedData['AMOUNT RECEIVED']
           ? Number(updatedData['AMOUNT RECEIVED'])
           : 0
 
-        updatedData['AMOUNT DUE'] = total - discount - amountReceived
+        updatedData['AMOUNT DUE'] = parseFloat((total - discount - amountReceived).toFixed(2))
       }
 
       // If discount percentage or amount received changes, recalculate amount due
       if (name === 'DISCOUNT PERCENTAGE' || name === 'AMOUNT RECEIVED') {
         const total = updatedData['TOTAL AMOUNT'] ? Number(updatedData['TOTAL AMOUNT']) : 0
         const discount = updatedData['DISCOUNT PERCENTAGE']
-          ? (total * Number(updatedData['DISCOUNT PERCENTAGE'])) / 100
+          ? parseFloat(((total * Number(updatedData['DISCOUNT PERCENTAGE'])) / 100).toFixed(2))
           : 0
         const amountReceived = updatedData['AMOUNT RECEIVED']
           ? Number(updatedData['AMOUNT RECEIVED'])
           : 0
 
-        updatedData['AMOUNT DUE'] = total - discount - amountReceived
+        updatedData['AMOUNT DUE'] = parseFloat((total - discount - amountReceived).toFixed(2))
       }
 
       return updatedData

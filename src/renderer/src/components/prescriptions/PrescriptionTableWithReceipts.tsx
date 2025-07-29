@@ -55,8 +55,8 @@ const PrescriptionTableWithReceipts: React.FC<PrescriptionTableWithReceiptsProps
     cash: false,
     prescription: true,
     readingsandfindings: true,
-    separatereadings: false,
-    separatefindings: false
+    readings: false,
+    clinical: false
   })
   // State for managing receipt viewing and operations
 
@@ -598,7 +598,7 @@ const PrescriptionTableWithReceipts: React.FC<PrescriptionTableWithReceiptsProps
                         <input
                           type="checkbox"
                           checked={selectedReportTypes.separatereadings}
-                          onChange={() => handleReportTypeChange('separatereadings')}
+                          onChange={() => handleReportTypeChange('readings')}
                           className="form-checkbox h-4 w-4 text-blue-600"
                         />
                         <span>Separate Readings</span>
@@ -607,7 +607,7 @@ const PrescriptionTableWithReceipts: React.FC<PrescriptionTableWithReceiptsProps
                         <input
                           type="checkbox"
                           checked={selectedReportTypes.separatefindings}
-                          onChange={() => handleReportTypeChange('separatefindings')}
+                          onChange={() => handleReportTypeChange('clinical')}
                           className="form-checkbox h-4 w-4 text-blue-600"
                         />
                         <span>Separate Findings</span>
@@ -843,7 +843,13 @@ const PrescriptionTableWithReceipts: React.FC<PrescriptionTableWithReceiptsProps
                 scope="col"
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
-                Guardian Name
+                Paid For
+              </th>
+              <th
+                scope="col"
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
+                Referred By
               </th>
               <th
                 scope="col"
@@ -896,14 +902,14 @@ const PrescriptionTableWithReceipts: React.FC<PrescriptionTableWithReceiptsProps
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {prescriptions.map((prescription) => (
+            {prescriptions.map((prescription, index) => (
               <tr
                 key={prescription.id as string}
                 className={`hover:bg-gray-50 cursor-pointer ${selectedPrescription?.id === prescription.id ? 'bg-blue-50' : ''}`}
                 onClick={() => handleRowClick(prescription)}
               >
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {(prescription.Sno as React.ReactNode) || '-'}
+                  {prescriptions?.length - index}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {(prescription.DATE as React.ReactNode) || '-'}
@@ -915,7 +921,10 @@ const PrescriptionTableWithReceipts: React.FC<PrescriptionTableWithReceiptsProps
                   {(prescription['PATIENT NAME'] as React.ReactNode) || '-'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {(prescription['GUARDIAN NAME'] as React.ReactNode) || '-'}
+                  {(prescription['PAID FOR'] as React.ReactNode) || '-'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {(prescription['REFFERED BY'] as React.ReactNode) || '-'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {(prescription.DOB as React.ReactNode) || '-'}

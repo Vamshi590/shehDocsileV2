@@ -535,6 +535,7 @@ const ReceiptViewer: React.FC<ReceiptViewerProps> = ({
               pd={String(report.PD || report.PD || '')}
               previousGlassPrescription={previousGlassPrescription}
               subjectiveRefraction={subjectiveRefraction}
+              sighttype={String(report.sighttype || report.SIGHTTYPE || '')}
               lensType={String(report.lensType || report.LENS_TYPE || '')}
               advise={eyeReadingsData.notes}
             />
@@ -620,6 +621,7 @@ const ReceiptViewer: React.FC<ReceiptViewerProps> = ({
               previousGlassPrescription={previousGlassPrescription}
               subjectiveRefraction={subjectiveRefraction}
               pd={String(report.PD || report.PD || '')}
+              sighttype={String(report.sighttype || report.SIGHTTYPE || '')}
               lensType={String(report.lensType || report.LENS_TYPE || '')}
               clinicalFindings={{
                 leftEye: {

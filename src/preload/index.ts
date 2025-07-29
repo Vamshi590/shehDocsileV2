@@ -110,6 +110,8 @@ const api = {
 
   // Prescriptions & Receipts Management
   getPrescriptions: () => ipcRenderer.invoke('getPrescriptions'),
+  getPrescriptionsByPatientId: (patientId: string) =>
+    ipcRenderer.invoke('getPrescriptionsByPatientId', patientId),
   addPrescription: (prescription: Prescription) =>
     ipcRenderer.invoke('addPrescription', prescription),
   updatePrescription: (id: string, prescription: Prescription) =>
@@ -119,8 +121,6 @@ const api = {
     ipcRenderer.invoke('searchPrescriptions', searchTerm),
   getTodaysPrescriptions: () => ipcRenderer.invoke('getTodaysPrescriptions'),
   getLatestPrescriptionId: () => ipcRenderer.invoke('getLatestPrescriptionId'),
-  getReceiptsByPatientId: (patientId: string) =>
-    ipcRenderer.invoke('getReceiptsByPatientId', patientId),
 
   // Labs Management
   getLabs: () => ipcRenderer.invoke('getLabs'),

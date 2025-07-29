@@ -33,6 +33,7 @@ interface ReceiptFormProps {
   patients: Patient[]
   selectedPatient: Patient | null
   initialData?: Record<string, unknown>
+  type?: string
 }
 
 const ReceiptForm: React.FC<ReceiptFormProps> = ({
@@ -40,7 +41,8 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
   onCancel,
   patients,
   selectedPatient,
-  initialData
+  initialData,
+  type
 }) => {
   // Initialize form data with default values
   const [formData, setFormData] = useState<Omit<Prescription, 'id'>>({
@@ -419,6 +421,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
       const selectedOption = paidForOptions.find((option) => option.name === value)
 
       if (selectedOption) {
+        // If a predefined option is selected, set all values accordingly
         setFormData((prev) => ({
           ...prev,
           [name]: value,
@@ -426,7 +429,21 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
           'DISCOUNT PERCENTAG': 0,
           'DISCOUNT AMOUNT': 0,
           'ADVANCE PAID': 0,
-          'AMOUNT DUE': selectedOption.amount
+          'AMOUNT RECEIVED': selectedOption.amount,
+          'AMOUNT DUE': 0
+        }))
+        return
+      } else {
+        // If manually entered (not in predefined list), reset financial fields
+        setFormData((prev) => ({
+          ...prev,
+          [name]: value,
+          'TOTAL AMOUNT': '',
+          'DISCOUNT PERCENTAG': 0,
+          'DISCOUNT AMOUNT': 0,
+          'ADVANCE PAID': 0,
+          'AMOUNT RECEIVED': '',
+          'AMOUNT DUE': 0
         }))
         return
       }
@@ -467,41 +484,76 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
       }
     }
 
-    // Calculate discount amount when total amount or discount percentage changes
-    if (name === 'TOTAL AMOUNT' || name === 'DISCOUNT PERCENTAG') {
-      const totalAmount =
-        name === 'TOTAL AMOUNT' ? Number(value) : Number(formData['TOTAL AMOUNT'] || 0)
-      const discountPercentage =
-        name === 'DISCOUNT PERCENTAG' ? Number(value) : Number(formData['DISCOUNT PERCENTAG'] || 0)
+    // When Total Amount changes, update received amount and calculations
+    if (name === 'TOTAL AMOUNT') {
+      const totalAmount = Number(value) || 0
+      const discountPercentage = Number(formData['DISCOUNT PERCENTAG'] || 0)
+      const discountAmount = (totalAmount * discountPercentage) / 100
 
-      if (!isNaN(totalAmount) && !isNaN(discountPercentage)) {
-        const discountAmount = (totalAmount * discountPercentage) / 100
-        setFormData((prev) => ({
-          ...prev,
-          'DISCOUNT AMOUNT': discountAmount
-        }))
-      }
-    }
+      // Set amount received to total amount - discount by default
+      const amountReceived = totalAmount - discountAmount
+      const amountDue = 0 // Since amount received equals total - discount
 
-    // Calculate amount due when relevant fields change
-    if (
-      name === 'TOTAL AMOUNT' ||
-      name === 'DISCOUNT PERCENTAG' ||
-      name === 'DISCOUNT AMOUNT' ||
-      name === 'ADVANCE PAID' ||
-      name === 'AMOUNT RECEIVED'
-    ) {
-      const totalAmount = Number(formData['TOTAL AMOUNT'] || 0)
-      const discountAmount =
-        name === 'DISCOUNT AMOUNT' ? Number(value) : Number(formData['DISCOUNT AMOUNT'] || 0)
-      const advancePaid =
-        name === 'ADVANCE PAID' ? Number(value) : Number(formData['ADVANCE PAID'] || 0)
-      const amountReceived =
-        name === 'AMOUNT RECEIVED' ? Number(value) : Number(formData['AMOUNT RECEIVED'] || 0)
-
-      const amountDue = totalAmount - discountAmount - advancePaid - amountReceived
       setFormData((prev) => ({
         ...prev,
+        'TOTAL AMOUNT': totalAmount,
+        'DISCOUNT AMOUNT': discountAmount,
+        'AMOUNT RECEIVED': amountReceived,
+        'AMOUNT DUE': amountDue
+      }))
+    }
+
+    // When Discount Percentage changes
+    else if (name === 'DISCOUNT PERCENTAG') {
+      const totalAmount = Number(formData['TOTAL AMOUNT'] || 0)
+      const discountPercentage = Number(value) || 0
+      const discountAmount = (totalAmount * discountPercentage) / 100
+
+      // Update amount received to be total - discount
+      const amountReceived = totalAmount - discountAmount
+      const amountDue = 0 // Since amount received equals total - discount
+
+      setFormData((prev) => ({
+        ...prev,
+        'DISCOUNT PERCENTAG': discountPercentage,
+        'DISCOUNT AMOUNT': discountAmount,
+        'AMOUNT RECEIVED': amountReceived,
+        'AMOUNT DUE': amountDue
+      }))
+    }
+
+    // When Advance Paid changes
+    else if (name === 'ADVANCE PAID') {
+      const totalAmount = Number(formData['TOTAL AMOUNT'] || 0)
+      const discountAmount = Number(formData['DISCOUNT AMOUNT'] || 0)
+      const advancePaid = Number(value) || 0
+
+      // Set amount received equal to advance paid
+      const amountReceived = advancePaid
+
+      // Calculate amount due
+      const amountDue = totalAmount - discountAmount - amountReceived
+
+      setFormData((prev) => ({
+        ...prev,
+        'ADVANCE PAID': advancePaid,
+        'AMOUNT RECEIVED': amountReceived,
+        'AMOUNT DUE': amountDue >= 0 ? amountDue : 0
+      }))
+    }
+
+    // When Amount Received changes
+    else if (name === 'AMOUNT RECEIVED') {
+      const totalAmount = Number(formData['TOTAL AMOUNT'] || 0)
+      const discountAmount = Number(formData['DISCOUNT AMOUNT'] || 0)
+      const amountReceived = Number(value) || 0
+
+      // Calculate amount due
+      const amountDue = totalAmount - discountAmount - amountReceived
+
+      setFormData((prev) => ({
+        ...prev,
+        'AMOUNT RECEIVED': amountReceived,
         'AMOUNT DUE': amountDue >= 0 ? amountDue : 0
       }))
     }
@@ -545,20 +597,42 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
     const selectedOption = paidForOptions.find((item) => item.name === option)
 
     if (selectedOption) {
+      // Set total amount from the selected option
+      const totalAmount = selectedOption.amount
+
+      // Reset discount percentage to 0
+      const discountPercentage = 0
+      const discountAmount = 0
+
+      // Reset advance paid to 0
+      const advancePaid = 0
+
+      // Set amount received equal to total amount initially
+      const amountReceived = totalAmount
+
+      // Amount due should be 0 initially since amount received equals total amount
+      const amountDue = 0
+
       setFormData((prevData) => ({
         ...prevData,
         'PAID FOR': option,
-        'TOTAL AMOUNT': selectedOption.amount.toString(),
-        'AMOUNT RECEIVED': selectedOption.amount.toString(),
-        'AMOUNT DUE': '0'
+        'TOTAL AMOUNT': totalAmount,
+        'DISCOUNT PERCENTAG': discountPercentage,
+        'DISCOUNT AMOUNT': discountAmount,
+        'ADVANCE PAID': advancePaid,
+        'AMOUNT RECEIVED': amountReceived,
+        'AMOUNT DUE': amountDue
       }))
     } else {
       setFormData((prevData) => ({
         ...prevData,
         'PAID FOR': option,
         'TOTAL AMOUNT': '',
+        'DISCOUNT PERCENTAG': 0,
+        'DISCOUNT AMOUNT': 0,
+        'ADVANCE PAID': 0,
         'AMOUNT RECEIVED': '',
-        'AMOUNT DUE': ''
+        'AMOUNT DUE': 0
       }))
     }
 
@@ -574,34 +648,6 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
     setShowPaymentModeDropdown(false)
   }
 
-  // // Handle doctor select
-  // const handleDoctorSelect = (option: string): void => {
-  //   setFormData((prev) => ({
-  //     ...prev,
-  //     'DOCTOR NAME': option
-  //   }))
-  //   setShowDoctorDropdown(false)
-  // }
-
-  // // Handle department select
-  // const handleDepartmentSelect = (option: string): void => {
-  //   setFormData((prev) => ({
-  //     ...prev,
-  //     DEPARTMENT: option
-  //   }))
-  //   setShowDepartmentDropdown(false)
-  // }
-
-  // // Handle referred by select
-  // const handleReferredBySelect = (option: string): void => {
-  //   setFormData((prev) => ({
-  //     ...prev,
-  //     'REFERRED BY': option
-  //   }))
-  //   setShowReferredByDropdown(false)
-  // }
-
-  // Handle click outside to close dropdowns
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent): void => {
       // Close Paid For dropdown when clicking outside
@@ -613,21 +659,6 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
       if (paymentModeRef.current && !paymentModeRef.current.contains(event.target as Node)) {
         setTimeout(() => setShowPaymentModeDropdown(false), 200)
       }
-
-      // // Close Doctor dropdown when clicking outside
-      // if (doctorRef.current && !doctorRef.current.contains(event.target as Node)) {
-      //   setTimeout(() => setShowDoctorDropdown(false), 200)
-      // }
-
-      // // Close Department dropdown when clicking outside
-      // if (departmentRef.current && !departmentRef.current.contains(event.target as Node)) {
-      //   setTimeout(() => setShowDepartmentDropdown(false), 200)
-      // }
-
-      // // Close Referred By dropdown when clicking outside
-      // if (referredByRef.current && !referredByRef.current.contains(event.target as Node)) {
-      //   setTimeout(() => setShowReferredByDropdown(false), 200)
-      // }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
@@ -639,114 +670,6 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* <div className="bg-gray-50 p-4 rounded-md">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Doctor Information</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="relative">
-            <label htmlFor="DOCTOR NAME" className="block text-sm font-medium text-gray-700">
-              Doctor Name *
-            </label>
-            <input
-              type="text"
-              name="DOCTOR NAME"
-              id="DOCTOR NAME"
-              value={(formData['DOCTOR NAME'] as string) || ''}
-              onChange={handleChange}
-              onFocus={() => setShowDoctorDropdown(true)}
-              required
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
-            {showDoctorDropdown && filteredDoctorOptions.length > 0 && (
-              <div
-                ref={doctorRef}
-                className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base overflow-auto focus:outline-none sm:text-sm"
-              >
-                {filteredDoctorOptions.map((option, index) => (
-                  <div
-                    key={index}
-                    className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      handleDoctorSelect(option)
-                    }}
-                  >
-                    {option}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="relative">
-            <label htmlFor="DEPARTMENT" className="block text-sm font-medium text-gray-700">
-              Department
-            </label>
-            <input
-              type="text"
-              name="DEPARTMENT"
-              id="DEPARTMENT"
-              value={(formData['DEPARTMENT'] as string) || ''}
-              onChange={handleChange}
-              onFocus={() => setShowDepartmentDropdown(true)}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
-            {showDepartmentDropdown && filteredDepartmentOptions.length > 0 && (
-              <div
-                ref={departmentRef}
-                className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base overflow-auto focus:outline-none sm:text-sm"
-              >
-                {filteredDepartmentOptions.map((option, index) => (
-                  <div
-                    key={index}
-                    className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      handleDepartmentSelect(option)
-                    }}
-                  >
-                    {option}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="relative">
-            <label htmlFor="REFERRED BY" className="block text-sm font-medium text-gray-700">
-              Referred By
-            </label>
-            <input
-              type="text"
-              name="REFERRED BY"
-              id="REFERRED BY"
-              value={(formData['REFERRED BY'] as string) || 'Self'}
-              onChange={handleChange}
-              onFocus={() => setShowReferredByDropdown(true)}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
-            {showReferredByDropdown && filteredReferredByOptions.length > 0 && (
-              <div
-                ref={referredByRef}
-                className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base overflow-auto focus:outline-none sm:text-sm"
-              >
-                {filteredReferredByOptions.map((option, index) => (
-                  <div
-                    key={index}
-                    className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      handleReferredBySelect(option)
-                    }}
-                  >
-                    {option}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div> */}
-
       {/* Financial Section */}
       <div className="bg-gray-50 p-4 rounded-md">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Financial Details</h3>
@@ -800,7 +723,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
               value={(formData['TOTAL AMOUNT'] as number) || ''}
               onChange={handleChange}
               required
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full border border-gray-300 text-black rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
@@ -818,7 +741,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
               step="0.01"
               value={(formData['DISCOUNT PERCENTAG'] as number) || ''}
               onChange={handleChange}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full border border-gray-300 text-black rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
@@ -836,7 +759,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
               value={(formData['DISCOUNT AMOUNT'] as number) || ''}
               onChange={handleChange}
               readOnly
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-100 text-gray-500"
+              className="mt-1 block w-full border border-gray-300 text-black rounded-md shadow-sm py-2 px-3 bg-gray-100 text-gray-500"
             />
           </div>
 
@@ -853,7 +776,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
               step="0.01"
               value={(formData['ADVANCE PAID'] as number) || ''}
               onChange={handleChange}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full border border-gray-300 text-black rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
@@ -870,7 +793,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
               step="0.01"
               value={(formData['AMOUNT RECEIVED'] as number) || ''}
               onChange={handleChange}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full border border-gray-300 text-black rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
@@ -888,7 +811,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
               value={(formData['AMOUNT DUE'] as number) || ''}
               onChange={handleChange}
               readOnly
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-100 text-gray-500"
+              className="mt-1 block w-full border border-gray-300 text-black rounded-md shadow-sm py-2 px-3 bg-gray-100 text-gray-500"
             />
           </div>
 
@@ -918,7 +841,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
                 setShowPaymentModeDropdown(true)
               }}
               required
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full border border-gray-300 rounded-md text-black shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
             {showPaymentModeDropdown && filteredPaymentModeOptions.length > 0 && (
               <div className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base overflow-auto">
@@ -941,21 +864,25 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
       </div>
 
       {/* Submit and Cancel Buttons */}
-      <div className="flex justify-end space-x-3 mt-6">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-        >
-          Save
-        </button>
-      </div>
+      {type === 'prescriptionedit' ? (
+        ''
+      ) : (
+        <div className="flex justify-end space-x-3 mt-6">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+          >
+            Save
+          </button>
+        </div>
+      )}
     </form>
   )
 }

@@ -256,7 +256,7 @@ export default function HospitalReceipt({
           {/* Advice & Review Section */}
           {((typeof advise === 'string' && advise) ||
             (Array.isArray(advise) && advise.length > 0)) && (
-            <div className="pb-3 mb-16">
+            <div className="pb-3 mb-1">
               <div className="text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Advice block */}
                 <div>
@@ -264,13 +264,19 @@ export default function HospitalReceipt({
                   {typeof advise === 'string' ? (
                     <div>{advise}</div>
                   ) : (
-                    <ul className="list-disc ml-4">
-                      {Array.isArray(advise) &&
-                        advise.map((item, idx) => <li key={idx}>{item}</li>)}
-                    </ul>
+                    <div className="mt-1">
+                      {Array.isArray(advise) && advise.filter(Boolean).join(' / ')}
+                    </div>
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {notes && (
+            <div className="text-[11px] flex items-center flex-col space-x-2">
+              <p className="font-bold">Advice :</p>
+              <p>{notes}</p>
             </div>
           )}
           {reviewDate && (
@@ -281,10 +287,6 @@ export default function HospitalReceipt({
               </div>
             </div>
           )}
-        </div>
-        <div className="mt-4 text-[11px] flex space-x-2">
-          <p className="font-bold">Advice :</p>
-          <p>{notes}</p>
         </div>
       </div>
 

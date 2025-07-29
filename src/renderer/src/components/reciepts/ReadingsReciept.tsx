@@ -49,6 +49,7 @@ interface EyeReceiptProps {
   lensType?: string
   advise?: string
   reviewDate?: string
+  sighttype?: string
 }
 
 export default function EyeReceipt({
@@ -56,6 +57,7 @@ export default function EyeReceipt({
   arReadingData,
   previousGlassPrescription,
   subjectiveRefraction,
+  sighttype,
   pd,
   lensType = '',
   advise = '',
@@ -373,7 +375,9 @@ export default function EyeReceipt({
         {/* Subjective Refraction Section */}
         {subjectiveRefraction && (
           <div className="pb-3 mb-4 border-b border-[#000000]">
-            <h3 className="text-xs font-bold mb-3 text-center">SUBJECTIVE REFRACTION</h3>
+            <h3 className="text-xs font-bold mb-3 text-center">
+              PRESENT GLASS PRESCRIPTION {sighttype ? `(${sighttype})` : ''}
+            </h3>
             <table className="w-full border-collapse text-[11px]">
               <thead>
                 <tr>

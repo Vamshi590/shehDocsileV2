@@ -1035,17 +1035,24 @@ ipcMain.handle('getPatientById', async (_, patientId) => {
 ipcMain.handle('getLatestPatientId', async () => {
   try {
     // First try Supabase - just get the count
-    const { count, error } = await supabase
-      .from('patients')
-      .select('*', { count: 'exact', head: true })
+    const { data, error } = await supabase.from('patients').select('patientId')
 
     if (error) {
       throw new Error(`Supabase error: ${error.message}`)
     }
+    // Filter and convert to integers
+    const patientIds = data
+      .map((p) => p.patientId)
+      .filter((id) => /^\d+$/.test(id)) // only numeric strings
+      .map((id) => parseInt(id, 10)) // convert to int
 
-    // Return the count (frontend will format it with leading zeros)
-    console.log('Latest patient count fetched from Supabase successfully:', count)
-    return { success: true, data: count || 0, message: 'Latest patient ID fetched successfully' }
+    if (patientIds.length === 0) {
+      console.log('No valid patient IDs found.')
+      return
+    }
+    const maxId = Math.max(...patientIds)
+    console.log('Max Patient ID:', maxId)
+    return { success: true, data: maxId || 0, message: 'Latest patient ID fetched successfully' }
   } catch (error) {
     console.error('Error getting latest patient ID from Supabase:', error)
     return {
@@ -1281,6 +1288,39 @@ ipcMain.handle('getLatestPrescriptionId', async () => {
   }
 })
 
+// Get prescriptions by patient ID
+ipcMain.handle('getPrescriptionsByPatientId', async (_, patientId) => {
+  try {
+    // Fetch prescriptions for the specific patient from Supabase
+    const { data: prescriptions, error } = await supabase
+      .from('prescriptions')
+      .select('*')
+      .eq('PATIENT ID', patientId)
+      .order('DATE', { ascending: false })
+
+    if (error) {
+      throw new Error(`Supabase error: ${error.message}`)
+    }
+
+    console.log(`Prescriptions for patient ${patientId} fetched successfully`)
+    return {
+      success: true,
+      data: prescriptions || [],
+      message:
+        prescriptions && prescriptions.length > 0
+          ? `Found ${prescriptions.length} prescriptions for patient`
+          : 'No prescriptions found for this patient'
+    }
+  } catch (error) {
+    console.error(`Error getting prescriptions for patient ${patientId}:`, error)
+    return {
+      success: false,
+      data: [],
+      message: `Failed to fetch prescriptions: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }
+  }
+})
+
 // Get today's prescriptions
 ipcMain.handle('getTodaysPrescriptions', async () => {
   try {
@@ -1290,7 +1330,7 @@ ipcMain.handle('getTodaysPrescriptions', async () => {
       .from('prescriptions')
       .select('*')
       .eq('DATE', today)
-      .order('PATIENT ID', { ascending: false })
+      .order('CREATED AT', { ascending: false })
 
     if (error) {
       throw new Error(`Supabase error: ${error.message}`)
@@ -1444,37 +1484,6 @@ ipcMain.handle('deletePrescription', async (_, id) => {
     return false
   }
 })
-
-// Get receipts by patient ID
-ipcMain.handle('getReceiptsByPatientId', async (_, patientId) => {
-  try {
-    console.log('getReceiptsByPatientId called with patientId:', patientId)
-
-    // Fetch receipts for the specific patient from Supabase
-    const { data: receipts, error } = await supabase
-      .from('prescriptions')
-      .select('*')
-      .eq('patientId', patientId)
-      .eq('TYPE', 'RECEIPT')
-      .order('DATE', { ascending: false })
-
-    if (error) {
-      console.error(`Supabase error in getReceiptsByPatientId: ${error.message}`)
-      throw new Error(`Supabase error: ${error.message}`)
-    }
-
-    console.log(
-      `Receipts fetched for patient ${patientId} from Supabase:`,
-      receipts ? receipts.length : 0,
-      'receipts found'
-    )
-    return receipts || []
-  } catch (error) {
-    console.error('Error getting receipts by patient ID from Supabase:', error)
-    return []
-  }
-})
-
 // Search prescriptions by patient ID, name, or phone number
 ipcMain.handle('searchPrescriptions', async (_, searchTerm) => {
   try {

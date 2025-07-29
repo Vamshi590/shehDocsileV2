@@ -22,6 +22,7 @@ interface PatientInfo {
   age: string
   address: string
   mobile: string
+  refferedBy: string
   doctorName: string
   dept: string
 }
@@ -105,9 +106,9 @@ const MedicalReceipt: React.FC<MedicalReceiptProps> = ({ data }) => {
       <div className="mb-4 p-3 border border-[#000000]">
         <h3 className="text-xs font-bold mb-3">PATIENT INFORMATION</h3>
         <div className="text-[11px] grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
-          <div>
-            <div className="font-bold">BILL NO.</div>
-            <div>{patientInfo.billNumber}</div>
+              <div>
+            <div className="font-bold">PATIENT NAME</div>
+            <div>{patientInfo.patientName}</div>
           </div>
           <div>
             <div className="font-bold">PATIENT ID</div>
@@ -118,16 +119,16 @@ const MedicalReceipt: React.FC<MedicalReceiptProps> = ({ data }) => {
             <div>{patientInfo.date}</div>
           </div>
           <div>
-            <div className="font-bold">PATIENT NAME</div>
-            <div>{patientInfo.patientName}</div>
+            <div className="font-bold">BILL NO.</div>
+            <div>{patientInfo.billNumber}</div>
           </div>
           <div>
             <div className="font-bold">GENDER</div>
             <div>{patientInfo.gender}</div>
           </div>
           <div>
-            <div className="font-bold">GUARDIAN NAME</div>
-            <div>{patientInfo.guardianName || ''}</div>
+            <div className="font-bold">REFFERED BY</div>
+            <div>{patientInfo.refferedBy || ''}</div>
           </div>
           <div>
             <div className="font-bold">AGE</div>

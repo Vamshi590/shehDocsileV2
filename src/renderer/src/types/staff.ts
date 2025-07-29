@@ -20,6 +20,7 @@ export interface StaffUser {
   duesFollowUp: boolean
   data: boolean
   certificates: boolean
+  labs: boolean
   permissions?: {
     patients?: boolean
     prescriptions?: boolean
