@@ -34,7 +34,7 @@ interface Optical {
   model: string
   size: string
   power?: string // Optional for lenses
-  quantity: number
+  quantity: string // Changed from number to string for consistency
   price: number
   status: 'available' | 'completed' | 'out_of_stock'
 }
@@ -92,7 +92,7 @@ const Opticals: React.FC = () => {
     type: 'frame' | 'lens'
     brand: string
     model: string
-    quantity: number
+    quantity: string
     price: number
     power?: string
     size?: string
@@ -110,7 +110,7 @@ const Opticals: React.FC = () => {
     }
 
     const total = selectedOpticals.reduce((sum, optical) => {
-      return sum + optical.price * optical.quantity
+      return sum + optical.price * Number(optical.quantity)
     }, 0)
 
     // Ensure we're setting a valid number
@@ -160,11 +160,10 @@ const Opticals: React.FC = () => {
                 size: item.size || '',
                 power: item.power,
                 quantity:
-                  typeof item.quantity === 'number'
-                    ? item.quantity
-                    : item.quantity
-                      ? parseInt(String(item.quantity), 10) || 0
-                      : 0,
+                  // Always convert quantity to string regardless of input type
+                  typeof item.quantity === 'number' || typeof item.quantity === 'string'
+                    ? String(item.quantity)
+                    : '0',
                 price: typeof item.price === 'number' ? item.price : 0,
                 status: item.status || 'available'
               })) as Optical[]
@@ -280,11 +279,34 @@ const Opticals: React.FC = () => {
   const handleUpdateOptical = async (id: string, optical: Omit<Optical, 'id'>): Promise<void> => {
     try {
       setLoading(true)
+
+      const opticalToUpdate = { ...optical }
+      // If quantity is updated and greater than 0, automatically set status to Available
+      const currentOptical = opticals.find((o) => o.id === id)
+      const isQuantityUpdated =
+        currentOptical && Number(opticalToUpdate.quantity) !== Number(currentOptical.quantity)
+
+      if (isQuantityUpdated && Number(opticalToUpdate.quantity) > 0) {
+        opticalToUpdate.status = 'available'
+      }
       // Use type assertion for API calls with more specific types
       const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
-      const updatedOptical = await api.updateOpticalItem(id, { ...optical, id })
+      const updatedOptical = await api.updateOpticalItem(id, { ...opticalToUpdate, id })
+
       if (updatedOptical) {
-        setOpticals(opticals.map((o) => (o.id === id ? (updatedOptical as Optical) : o)))
+        // Make sure we're using the actual returned data from the API
+        // This ensures we have the correct values including quantity
+        const typedUpdatedOptical = updatedOptical as Optical
+
+        // Update the state with the correct data from the API response
+        setOpticals(opticals.map((o) => (o.id === id ? typedUpdatedOptical : o)))
+
+        // After updating an item, refresh the data to ensure consistency
+        // This is especially important for the quantity field
+        if (statusFilter !== 'all') {
+          handleFilterByStatus(statusFilter)
+        }
+
         setIsModalOpen(false)
         setEditingOptical(null)
         setError('')
@@ -347,18 +369,6 @@ const Opticals: React.FC = () => {
       if (response && response.success === true) {
         // Validate and sanitize each optical object before updating state
         const validOpticals = responseData
-          .filter((item) => item && typeof item === 'object')
-          .map((item) => ({
-            id: item.id || '',
-            type: item.type || 'frame',
-            brand: item.brand || '',
-            model: item.model || '',
-            size: item.size || '',
-            power: item.power,
-            quantity: typeof item.quantity === 'number' ? item.quantity : 0,
-            price: typeof item.price === 'number' ? item.price : 0,
-            status: item.status || 'available'
-          })) as Optical[]
 
         setOpticals(validOpticals)
         setError('')
@@ -447,18 +457,6 @@ const Opticals: React.FC = () => {
       if (response && response.success === true) {
         // Validate and sanitize each optical object before updating state
         const validOpticals = responseData
-          .filter((item) => item && typeof item === 'object')
-          .map((item) => ({
-            id: item.id || '',
-            type: item.type || 'frame',
-            brand: item.brand || '',
-            model: item.model || '',
-            size: item.size || '',
-            power: item.power,
-            quantity: typeof item.quantity === 'number' ? item.quantity : 0,
-            price: typeof item.price === 'number' ? item.price : 0,
-            status: item.status || 'available'
-          })) as Optical[]
 
         setOpticals(validOpticals)
         setError('')
@@ -546,19 +544,6 @@ const Opticals: React.FC = () => {
       if (response && response.success === true) {
         // Validate and sanitize each optical object before updating state
         const validOpticals = responseData
-          .filter((item) => item && typeof item === 'object')
-          .map((item) => ({
-            id: item.id || '',
-            type: item.type || 'frame',
-            brand: item.brand || '',
-            model: item.model || '',
-            size: item.size || '',
-            power: item.power,
-            quantity: typeof item.quantity === 'number' ? item.quantity : 0,
-            price: typeof item.price === 'number' ? item.price : 0,
-            status: item.status || 'available'
-          })) as Optical[]
-
         setOpticals(validOpticals)
         setError('')
 
@@ -721,7 +706,9 @@ const Opticals: React.FC = () => {
     if (existingIndex >= 0) {
       // Update quantity if already in the list
       const updatedOpticals = [...selectedOpticals]
-      updatedOpticals[existingIndex].quantity += quantity
+      // Convert existing quantity to number, add the new quantity, then convert back to string
+      const currentQuantity = Number(updatedOpticals[existingIndex].quantity)
+      updatedOpticals[existingIndex].quantity = String(currentQuantity + quantity)
       setSelectedOpticals(updatedOpticals)
       setSearchTerm('')
     } else {
@@ -733,7 +720,7 @@ const Opticals: React.FC = () => {
           type: optical.type,
           brand: optical.brand,
           model: optical.model,
-          quantity,
+          quantity: String(quantity),
           price: optical.price,
           power: optical.power,
           size: optical.size
@@ -745,9 +732,11 @@ const Opticals: React.FC = () => {
     // Update the original optical's quantity in the main list
     const updatedOpticals = opticals.map((item) => {
       if (item.id === optical.id) {
+        // Convert to number for subtraction, then back to string
+        const currentQuantity = Number(item.quantity)
         return {
           ...item,
-          quantity: item.quantity - quantity
+          quantity: String(currentQuantity - quantity)
         }
       }
       return item
@@ -767,9 +756,18 @@ const Opticals: React.FC = () => {
       console.log(opticals)
       const updatedOpticals = opticals.map((item) => {
         if (item.id === id) {
+          // Convert both quantities to numbers before adding
+          const currentQuantity =
+            typeof item.quantity === 'string' ? Number(item.quantity) : item.quantity
+          const removedQuantity =
+            typeof opticalToRemove.quantity === 'string'
+              ? Number(opticalToRemove.quantity)
+              : Number(opticalToRemove.quantity)
+
           return {
             ...item,
-            quantity: item.quantity + opticalToRemove.quantity
+            // Convert back to string to match the updated type
+            quantity: String(currentQuantity + removedQuantity)
           }
         }
         return item
@@ -785,6 +783,12 @@ const Opticals: React.FC = () => {
   // Function to toggle dispense dropdown menu
   const toggleDispenseDropdown = (): void => {
     setShowDispenseDropdown(!showDispenseDropdown)
+    setPatientPrescriptions([])
+    setSelectedOpticals([])
+    setTotalAmount(0)
+    setSearchTerm('')
+    setPatientId('')
+    setPatientName('')
   }
 
   // Function to handle clicking outside the dropdown to close it
@@ -1015,18 +1019,6 @@ const Opticals: React.FC = () => {
         if (response && response.success === true && Array.isArray(response.data)) {
           // Validate and sanitize each optical object before updating state
           const validOpticals = response.data
-            .filter((item) => item && typeof item === 'object')
-            .map((item) => ({
-              id: item.id || '',
-              type: item.type || 'frame',
-              brand: item.brand || '',
-              model: item.model || '',
-              size: item.size || '',
-              power: item.power,
-              quantity: typeof item.quantity === 'number' ? item.quantity : 0,
-              price: typeof item.price === 'number' ? item.price : 0,
-              status: item.status || 'available'
-            })) as Optical[]
 
           setOpticals(validOpticals)
         } else {
@@ -1667,13 +1659,13 @@ const Opticals: React.FC = () => {
                                     )}
                                   </div>
                                 ) : null}
-                                {latestPrescription['ADVISED FOR'] ||
-                                latestPrescription['ADVISED FOR'.toUpperCase()] ? (
+                                {latestPrescription['SIGHTTYPE'] ||
+                                latestPrescription['SIGHTTYPE'.toUpperCase()] ? (
                                   <div className="mt-2 text-sm text-gray-700">
-                                    <span className="font-medium">Advised For:</span>{' '}
+                                    <span className="font-medium">SIGHTTYPE:</span>{' '}
                                     {String(
-                                      latestPrescription['ADVISED FOR'] ||
-                                        latestPrescription['ADVISED FOR'.toUpperCase()] ||
+                                      latestPrescription['SIGHTTYPE'] ||
+                                        latestPrescription['SIGHTTYPE'.toUpperCase()] ||
                                         ''
                                     )}
                                   </div>
@@ -1759,7 +1751,7 @@ const Opticals: React.FC = () => {
                                   ₹{optical.price}
                                 </td>
                                 <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
-                                  ₹{optical.price * optical.quantity}
+                                  ₹{optical.price * Number(optical.quantity)}
                                 </td>
                                 <td className="px-3 py-2 whitespace-nowrap cursor-pointer text-sm text-gray-900">
                                   <button
@@ -1978,9 +1970,9 @@ const Opticals: React.FC = () => {
                   particulars: `${optical.brand} ${optical.model} (${optical.type})`,
                   power: optical.power || '', // Default empty as it may not be available
                   size: optical.size || '', // Default empty as it may not be available
-                  qty: optical.quantity,
+                  qty: Number(optical.quantity),
                   rate: optical.price,
-                  amount: optical.price * optical.quantity
+                  amount: optical.price * Number(optical.quantity)
                 })),
                 totals: {
                   totalAmount: totalAmount,
@@ -2001,7 +1993,7 @@ const Opticals: React.FC = () => {
                 slNo: index + 1,
                 particulars: `${optical.brand} ${optical.model} (${optical.type})${optical.power ? ` Power: ${optical.power}` : ''}${optical.size ? ` Size: ${optical.size}` : ''}`,
                 rate: optical.price,
-                amount: optical.price * optical.quantity
+                amount: optical.price * Number(optical.quantity)
               }))}
               total={totalAmount}
             />

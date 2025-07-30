@@ -8,7 +8,7 @@ interface Optical {
   model: string
   size: string
   power?: string // Optional for lenses
-  quantity: number
+  quantity: string // Changed from number to string for consistency
   price: number
   status: 'available' | 'completed' | 'out_of_stock'
 }
@@ -45,7 +45,17 @@ const OpticalEditModal: React.FC<OpticalEditModalProps> = ({
   const handleSubmit = async (updatedOptical: Omit<Optical, 'id'>): Promise<void> => {
     try {
       setIsSubmitting(true)
-      await onSave(optical.id, updatedOptical)
+
+      // Automatically update status to 'available' if quantity > 0 and current status is 'out_of_stock'
+      const finalOptical = { ...updatedOptical }
+
+      // Check if quantity was updated to a value greater than 0
+      if (Number(updatedOptical.quantity) > 0 && optical.status === 'out_of_stock') {
+        finalOptical.status = 'available'
+        console.log('Status automatically updated to available because quantity > 0')
+      }
+
+      await onSave(optical.id, finalOptical)
     } catch (error) {
       console.error('Error updating optical:', error)
     } finally {

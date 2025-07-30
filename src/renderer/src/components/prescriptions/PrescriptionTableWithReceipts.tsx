@@ -789,7 +789,7 @@ const PrescriptionTableWithReceipts: React.FC<PrescriptionTableWithReceiptsProps
 
       {/* Prescription Table */}
       <div
-        className="overflow-x-auto"
+        className="overflow-x-auto border border-gray-200 rounded-lg"
         style={{
           overflowX: 'auto',
           scrollbarWidth: 'thin',

@@ -7,7 +7,7 @@ interface Optical {
   model: string
   size: string
   power?: string // Optional for lenses
-  quantity: number
+  quantity: string
   price: number
   status: 'available' | 'completed' | 'out_of_stock'
 }
@@ -207,7 +207,7 @@ const OpticalTable: React.FC<OpticalTableProps> = ({
                   <button
                     onClick={() => {
                       const currentQty = quantities[optical.id] || 0
-                      if (currentQty < optical.quantity) {
+                      if (currentQty < Number(optical.quantity)) {
                         setQuantities({
                           ...quantities,
                           [optical.id]: currentQty + 1
@@ -215,7 +215,7 @@ const OpticalTable: React.FC<OpticalTableProps> = ({
                       }
                     }}
                     className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded"
-                    disabled={quantities[optical.id] >= optical.quantity}
+                    disabled={quantities[optical.id] >= Number(optical.quantity)}
                   >
                     +
                   </button>

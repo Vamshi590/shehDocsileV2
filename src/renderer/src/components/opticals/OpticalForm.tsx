@@ -6,7 +6,7 @@ interface Optical {
   model: string
   size: string
   power?: string // Optional for lenses
-  quantity: number
+  quantity: string
   price: number
   status: 'available' | 'completed' | 'out_of_stock'
 }
@@ -26,7 +26,7 @@ const OpticalForm: React.FC<OpticalFormProps> = ({
     model: '',
     size: '',
     power: '',
-    quantity: 1,
+    quantity: '1',
     price: 0,
     status: 'available'
   }
@@ -72,15 +72,18 @@ const OpticalForm: React.FC<OpticalFormProps> = ({
       newErrors.size = 'Size is required'
     }
 
-    if (formData.type === 'lens' && (!formData.power || typeof formData.power !== 'string' || !formData.power.trim())) {
+    if (
+      formData.type === 'lens' &&
+      (!formData.power || typeof formData.power !== 'string' || !formData.power.trim())
+    ) {
       newErrors.power = 'Power is required for lenses'
     }
 
-    if (formData.quantity <= 0) {
+    if (Number(formData.quantity) <= 0) {
       newErrors.quantity = 'Quantity must be greater than 0'
     }
 
-    if (formData.price <= 0) {
+    if (Number(formData.price) <= 0) {
       newErrors.price = 'Price must be greater than 0'
     }
 
@@ -106,7 +109,7 @@ const OpticalForm: React.FC<OpticalFormProps> = ({
           model: '',
           size: '',
           power: '',
-          quantity: 1,
+          quantity: '1',
           price: 0,
           status: 'available'
         })

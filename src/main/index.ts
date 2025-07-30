@@ -1361,21 +1361,21 @@ ipcMain.handle('addPrescription', async (_, prescription) => {
       if (!error && data && data.length > 0) {
         // Find the highest numeric Sno by parsing all values
         // This handles any number of records and ensures we get the true highest value
-        const numericSnos = data
-          .map((record) => {
-            // Handle both numeric and string Sno values
-            const snoValue = record.Sno
-            return typeof snoValue === 'number' ? snoValue : parseInt(snoValue as string)
-          })
-          .filter((sno) => !isNaN(sno))
 
-        if (numericSnos.length > 0) {
-          const highestNumericSno = Math.max(...numericSnos)
-          highestSnoFromSupabase = highestNumericSno.toString()
-          console.log('Highest numeric Sno found:', highestSnoFromSupabase)
-        } else {
-          console.log('No valid numeric Sno values found')
+        const SnoIds = data
+          .map((p) => p.Sno)
+          .filter((id) => /^\d+$/.test(id)) // only numeric strings
+          .map((id) => parseInt(id, 10)) // convert to int
+
+        if (SnoIds.length === 0) {
+          console.log('No valid Sno IDs found.')
+          return
         }
+        const maxId = Math.max(...SnoIds)
+        console.log('Max Sno ID:', maxId)
+
+        highestSnoFromSupabase = maxId.toString()
+        console.log('Highest numeric Sno found:', highestSnoFromSupabase)
       } else {
         console.log('No prescription records found in Supabase or error occurred')
       }
@@ -1416,11 +1416,15 @@ ipcMain.handle('addPrescription', async (_, prescription) => {
       }
 
       console.log('Prescription added to Supabase:', data)
-      return data[0] || prescriptionWithSno
+      return {
+        success: true,
+        data: data[0] || prescriptionWithSno,
+        message: 'Prescription added successfully'
+      }
     } catch (supabaseError) {
       console.error('Error adding prescription to Supabase:', supabaseError)
       // Continue with local file update even if Supabase fails
-      return false
+      return { success: false, data: null, message: 'Failed to add prescription to Supabase' }
     }
   } catch (error) {
     console.error('Error adding prescription:', error)
@@ -1449,11 +1453,15 @@ ipcMain.handle('updatePrescription', async (_, id, updatedPrescription) => {
 
       console.log('Prescription updated in Supabase:', data)
 
-      return data[0]
+      return {
+        success: true,
+        data: data[0] || updatedPrescription,
+        message: 'Prescription updated successfully'
+      }
     } catch (supabaseError) {
       console.error('Error updating prescription in Supabase:', supabaseError)
       // Fall back to Excel-only update if Supabase fails
-      return false
+      return { success: false, data: null, message: 'Failed to update prescription in Supabase' }
     }
   } catch (error) {
     console.error('Error updating prescription:', error)
@@ -1473,15 +1481,15 @@ ipcMain.handle('deletePrescription', async (_, id) => {
       }
 
       console.log('Prescription deleted from Supabase successfully')
-      return true
+      return { success: true, data: null, message: 'Prescription deleted successfully' }
     } catch (supabaseError) {
       console.error('Error deleting prescription from Supabase:', supabaseError)
       // Continue with local file update even if Supabase fails
-      return false
+      return { success: false, data: null, message: 'Failed to delete prescription from Supabase' }
     }
   } catch (error) {
     console.error('Error deleting prescription:', error)
-    return false
+    return { success: false, data: null, message: 'Failed to delete prescription' }
   }
 })
 // Search prescriptions by patient ID, name, or phone number
@@ -3428,6 +3436,18 @@ async function generateAnalyticsData(
             existingEyeCondition.count++
           } else {
             analyticsData.eyeConditionStats.conditions.push({ name: diagnosis, count: 1 })
+          }
+        }
+
+        if (prescription['PAID FOR']) {
+          const paidFor = prescription['PAID FOR'].toString()
+          if (
+            paidFor === 'REVIEW OP CONSULTATION' ||
+            paidFor === 'REVIEW OP WITHIN 15 DAYS' ||
+            paidFor === 'ROP REVIEW CONSULTATION'
+          ) {
+            analyticsData.patientTreatmentStats.followUps++
+            analyticsData.patientStats.followUp++
           }
         }
       })

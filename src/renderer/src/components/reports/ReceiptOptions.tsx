@@ -29,17 +29,16 @@ interface API {
 
 // Define props interface
 interface ReceiptOptionsProps {
-  reportId: string
-  reportType: string
   patientName: string
   patientPhone: string
-  onSelectReceiptType: (type: string, operationData?: Operation) => void
-  onGenerateReport?: (types: string[]) => void // New prop for handling multiple receipts
+  onSelectReceiptType: (type: string, operation?: Operation) => void
+  onGenerateReport?: (types: string[]) => void
   patientId?: string
+  reportId: string
+  reportType: string
 }
 
 const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
-  reportType,
   patientName,
   patientPhone,
   onSelectReceiptType,
@@ -54,6 +53,8 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
   const [operations, setOperations] = useState<Operation[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [isReportMode, setIsReportMode] = useState<boolean>(false)
+  const [reportReceiptTypes, setReportReceiptTypes] = useState<string[]>([])
   const [selectedReportTypes, setSelectedReportTypes] = useState<{ [key: string]: boolean }>({
     cash: false,
     prescription: true,
@@ -266,34 +267,35 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
 
   // Handle generating a report with selected receipt types
   const handleGenerateReport = (): void => {
-    // Get selected receipt types from checkboxes
-    const receiptTypesToCheck = Object.entries(selectedReportTypes)
+    // Convert selected report types object to array of selected types
+    const selectedTypes = Object.entries(selectedReportTypes)
       .filter(([, isSelected]) => isSelected)
       .map(([type]) => type)
 
-    if (receiptTypesToCheck.length === 0) {
+    if (selectedTypes.length === 0) {
       toast.error('Please select at least one receipt type')
       return
     }
 
-    // If onGenerateReport prop is provided, use it for multiple receipts
+    // Close the dropdown
+    setShowReportOptions(false)
+
+    // Set report mode and report receipt types
+    setIsReportMode(true)
+    setReportReceiptTypes(selectedTypes)
+
+    // If there's a callback for handling report generation, call it
     if (onGenerateReport) {
-      // Pass all selected receipt types to the parent component
-      onGenerateReport(receiptTypesToCheck)
+      onGenerateReport(selectedTypes)
     } else {
-      // Fallback to the old behavior if onGenerateReport is not provided
-      // For each selected receipt type, trigger the appropriate receipt generation
-      receiptTypesToCheck.forEach((type) => {
-        if (type === 'operation' && operations.length > 0) {
-          // For operation receipts, use the first operation in the list
-          onSelectReceiptType(type, operations[0])
-        } else {
-          onSelectReceiptType(type)
-        }
-      })
+      // If no callback, use the first selected type as fallback
+      onSelectReceiptType(selectedTypes[0])
     }
 
-    setShowReportOptions(false) // Hide dropdown after generating
+    // Log for debugging
+    console.log('Generating report with types:', selectedTypes)
+
+    toast.success(`Generating report with ${selectedTypes.length} receipt types`)
   }
 
   // Handle operation selection
@@ -305,84 +307,170 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
   // Handle print button click with proper preview
   const handlePrint = async (): Promise<void> => {
     try {
-      const receiptEl = document.querySelector('[id^="receipt-"]') as HTMLElement | null
-      if (!receiptEl) {
-        toast.error('Receipt element not found')
-        return
-      }
-      // Clone and clean oklch colors
-      const clone = receiptEl.cloneNode(true) as HTMLElement
-      stripOKLCH(clone)
-
-      // Set exact A4 dimensions and center content
-      clone.style.width = '794px' // A4 width in pixels
-      clone.style.height = '1123px' // A4 height in pixels
-      clone.style.backgroundColor = '#ffffff'
-      clone.style.margin = '0 auto' // Center horizontally
-      clone.style.position = 'relative' // Ensure proper positioning
-      clone.style.transform = 'none' // Remove any transforms that might cause tilting
-
-      // Create a container with proper centering and alignment
-      const container = document.createElement('div')
-      container.style.position = 'absolute'
-      container.style.top = '0'
-      container.style.left = '0'
-      container.style.width = '100%'
-      container.style.height = '100%'
-      container.style.display = 'flex'
-      container.style.justifyContent = 'center'
-      container.style.alignItems = 'center'
-      container.style.backgroundColor = '#ffffff'
-      container.style.padding = '0'
-      container.style.margin = '0'
-      container.style.overflow = 'hidden'
-      container.style.zIndex = '-9999' // Hide from view
-
-      // Add the clone to the container
-      container.appendChild(clone)
-      document.body.appendChild(container)
-
-      // Use html2canvas with improved settings
-      const canvas = await html2canvas(clone, {
-        scale: 2, // Higher scale for better quality
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        imageTimeout: 0,
-        removeContainer: false // We'll handle removal ourselves
-      })
-
-      // Clean up the DOM
-      document.body.removeChild(container)
-
-      const imgData = canvas.toDataURL('image/png')
-
       // Create PDF with A4 dimensions (points)
       const pdfDoc = await PDFDocument.create()
       const PAGE_WIDTH = 595.28
       const PAGE_HEIGHT = 841.89
-      const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
-      const pngImage = await pdfDoc.embedPng(imgData)
 
-      // Calculate dimensions to perfectly center the image
-      const imgWidth = pngImage.width
-      const imgHeight = pngImage.height
-      const scale = Math.min(PAGE_WIDTH / imgWidth, PAGE_HEIGHT / imgHeight) * 0.98 // 98% of max size for small margin
-      const drawWidth = imgWidth * scale
-      const drawHeight = imgHeight * scale
+      if (isReportMode && reportReceiptTypes.length > 0) {
+        // In report mode, capture all receipt elements directly from the DOM
+        // since they're all rendered at once in the scrollable view
+        for (let i = 0; i < reportReceiptTypes.length; i++) {
+          const receiptType = reportReceiptTypes[i]
 
-      // Precisely center the image on the page
-      const x = (PAGE_WIDTH - drawWidth) / 2
-      const y = (PAGE_HEIGHT - drawHeight) / 2
+          // Find the specific receipt element by its ID
+          const receiptEl = document.getElementById(`receipt-${receiptType}`) as HTMLElement | null
 
-      // Draw the image with exact positioning
-      page.drawImage(pngImage, {
-        x,
-        y,
-        width: drawWidth,
-        height: drawHeight
-      })
+          if (receiptEl) {
+            // Clone and clean oklch colors
+            const clone = receiptEl.cloneNode(true) as HTMLElement
+            stripOKLCH(clone)
+
+            // Set exact A4 dimensions and center content
+            clone.style.width = '794px' // A4 width in pixels
+            clone.style.height = '1123px' // A4 height in pixels
+            clone.style.backgroundColor = '#ffffff'
+            clone.style.margin = '0 auto' // Center horizontally
+            clone.style.position = 'relative' // Ensure proper positioning
+            clone.style.transform = 'none' // Remove any transforms that might cause tilting
+
+            // Create a container with proper centering and alignment
+            const container = document.createElement('div')
+            container.style.position = 'absolute'
+            container.style.top = '0'
+            container.style.left = '0'
+            container.style.width = '100%'
+            container.style.height = '100%'
+            container.style.display = 'flex'
+            container.style.justifyContent = 'center'
+            container.style.alignItems = 'center'
+            container.style.backgroundColor = '#ffffff'
+            container.style.padding = '0'
+            container.style.margin = '0'
+            container.style.overflow = 'hidden'
+            container.style.zIndex = '-9999' // Hide from view
+
+            // Add the clone to the container
+            container.appendChild(clone)
+            document.body.appendChild(container)
+
+            // Use html2canvas with improved settings
+            const canvas = await html2canvas(clone, {
+              scale: 2, // Higher scale for better quality
+              backgroundColor: '#ffffff',
+              useCORS: true,
+              allowTaint: true,
+              logging: false,
+              imageTimeout: 0,
+              removeContainer: false // We'll handle removal ourselves
+            })
+
+            // Clean up the DOM
+            document.body.removeChild(container)
+
+            const imgData = canvas.toDataURL('image/png')
+            const pngImage = await pdfDoc.embedPng(imgData)
+
+            // Add a new page for each receipt type
+            const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
+
+            // Calculate dimensions to perfectly center the image
+            const imgWidth = pngImage.width
+            const imgHeight = pngImage.height
+            const scale = Math.min(PAGE_WIDTH / imgWidth, PAGE_HEIGHT / imgHeight) * 0.98 // 98% of max size for small margin
+            const drawWidth = imgWidth * scale
+            const drawHeight = imgHeight * scale
+
+            // Precisely center the image on the page
+            const x = (PAGE_WIDTH - drawWidth) / 2
+            const y = (PAGE_HEIGHT - drawHeight) / 2
+
+            // Draw the image with exact positioning
+            page.drawImage(pngImage, {
+              x,
+              y,
+              width: drawWidth,
+              height: drawHeight
+            })
+          }
+        }
+      } else {
+        // Single receipt mode - original behavior
+        const receiptEl = document.querySelector('[id^="receipt-"]') as HTMLElement | null
+        if (!receiptEl) {
+          toast.error('Receipt element not found')
+          return
+        }
+
+        // Clone and clean oklch colors
+        const clone = receiptEl.cloneNode(true) as HTMLElement
+        stripOKLCH(clone)
+
+        // Set exact A4 dimensions and center content
+        clone.style.width = '794px' // A4 width in pixels
+        clone.style.height = '1123px' // A4 height in pixels
+        clone.style.backgroundColor = '#ffffff'
+        clone.style.margin = '0 auto' // Center horizontally
+        clone.style.position = 'relative' // Ensure proper positioning
+        clone.style.transform = 'none' // Remove any transforms that might cause tilting
+
+        // Create a container with proper centering and alignment
+        const container = document.createElement('div')
+        container.style.position = 'absolute'
+        container.style.top = '0'
+        container.style.left = '0'
+        container.style.width = '100%'
+        container.style.height = '100%'
+        container.style.display = 'flex'
+        container.style.justifyContent = 'center'
+        container.style.alignItems = 'center'
+        container.style.backgroundColor = '#ffffff'
+        container.style.padding = '0'
+        container.style.margin = '0'
+        container.style.overflow = 'hidden'
+        container.style.zIndex = '-9999' // Hide from view
+
+        // Add the clone to the container
+        container.appendChild(clone)
+        document.body.appendChild(container)
+
+        // Use html2canvas with improved settings
+        const canvas = await html2canvas(clone, {
+          scale: 2, // Higher scale for better quality
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          imageTimeout: 0,
+          removeContainer: false // We'll handle removal ourselves
+        })
+
+        // Clean up the DOM
+        document.body.removeChild(container)
+
+        const imgData = canvas.toDataURL('image/png')
+        const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
+        const pngImage = await pdfDoc.embedPng(imgData)
+
+        // Calculate dimensions to perfectly center the image
+        const imgWidth = pngImage.width
+        const imgHeight = pngImage.height
+        const scale = Math.min(PAGE_WIDTH / imgWidth, PAGE_HEIGHT / imgHeight) * 0.98 // 98% of max size for small margin
+        const drawWidth = imgWidth * scale
+        const drawHeight = imgHeight * scale
+
+        // Precisely center the image on the page
+        const x = (PAGE_WIDTH - drawWidth) / 2
+        const y = (PAGE_HEIGHT - drawHeight) / 2
+
+        // Draw the image with exact positioning
+        page.drawImage(pngImage, {
+          x,
+          y,
+          width: drawWidth,
+          height: drawHeight
+        })
+      }
 
       const pdfBytes = await pdfDoc.save()
 
@@ -420,97 +508,191 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
 
   const sendWhatsAppMessage = async (): Promise<void> => {
     try {
-      const receiptEl = document.querySelector('[id^="receipt-"]') as HTMLElement | null
-      if (!receiptEl) {
-        toast.error('Receipt element not found')
-        return
-      }
-      // Clone and clean oklch colors
-      const clone = receiptEl.cloneNode(true) as HTMLElement
-      stripOKLCH(clone)
-
-      // Set exact A4 dimensions and center content
-      clone.style.width = '794px' // A4 width in pixels
-      clone.style.height = '1123px' // A4 height in pixels
-      clone.style.backgroundColor = '#ffffff'
-      clone.style.margin = '0 auto' // Center horizontally
-      clone.style.position = 'relative' // Ensure proper positioning
-      clone.style.transform = 'none' // Remove any transforms that might cause tilting
-
-      // Create a container with proper centering and alignment
-      const container = document.createElement('div')
-      container.style.position = 'absolute'
-      container.style.top = '0'
-      container.style.left = '0'
-      container.style.width = '100%'
-      container.style.height = '100%'
-      container.style.display = 'flex'
-      container.style.justifyContent = 'center'
-      container.style.alignItems = 'center'
-      container.style.backgroundColor = '#ffffff'
-      container.style.padding = '0'
-      container.style.margin = '0'
-      container.style.overflow = 'hidden'
-      container.style.zIndex = '-9999' // Hide from view
-
-      // Add the clone to the container
-      container.appendChild(clone)
-      document.body.appendChild(container)
-
-      // Use html2canvas with improved settings
-      const canvas = await html2canvas(clone, {
-        scale: 2, // Higher scale for better quality
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        imageTimeout: 0,
-        removeContainer: false // We'll handle removal ourselves
-      })
-
-      // Clean up the DOM
-      document.body.removeChild(container)
-
-      const imgData = canvas.toDataURL('image/png')
-
       // Create PDF with A4 dimensions (points)
       const pdfDoc = await PDFDocument.create()
       const PAGE_WIDTH = 595.28
       const PAGE_HEIGHT = 841.89
-      const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
-      const pngImage = await pdfDoc.embedPng(imgData)
 
-      // Calculate dimensions to perfectly center the image
-      const imgWidth = pngImage.width
-      const imgHeight = pngImage.height
-      const scale = Math.min(PAGE_WIDTH / imgWidth, PAGE_HEIGHT / imgHeight) * 0.98 // 98% of max size for small margin
-      const drawWidth = imgWidth * scale
-      const drawHeight = imgHeight * scale
+      if (isReportMode && reportReceiptTypes.length > 0) {
+        // In report mode, capture all receipt elements directly from the DOM
+        // since they're all rendered at once in the scrollable view
+        for (let i = 0; i < reportReceiptTypes.length; i++) {
+          const receiptType = reportReceiptTypes[i]
 
-      // Precisely center the image on the page
-      const x = (PAGE_WIDTH - drawWidth) / 2
-      const y = (PAGE_HEIGHT - drawHeight) / 2
+          // Find the specific receipt element by its ID
+          const receiptEl = document.getElementById(`receipt-${receiptType}`) as HTMLElement | null
 
-      // Draw the image with exact positioning
-      page.drawImage(pngImage, {
-        x,
-        y,
-        width: drawWidth,
-        height: drawHeight
-      })
+          if (receiptEl) {
+            // Clone and clean oklch colors
+            const clone = receiptEl.cloneNode(true) as HTMLElement
+            stripOKLCH(clone)
+
+            // Set exact A4 dimensions and center content
+            clone.style.width = '794px' // A4 width in pixels
+            clone.style.height = '1123px' // A4 height in pixels
+            clone.style.backgroundColor = '#ffffff'
+            clone.style.margin = '0 auto' // Center horizontally
+            clone.style.position = 'relative' // Ensure proper positioning
+            clone.style.transform = 'none' // Remove any transforms that might cause tilting
+
+            // Create a container with proper centering and alignment
+            const container = document.createElement('div')
+            container.style.position = 'absolute'
+            container.style.top = '0'
+            container.style.left = '0'
+            container.style.width = '100%'
+            container.style.height = '100%'
+            container.style.display = 'flex'
+            container.style.justifyContent = 'center'
+            container.style.alignItems = 'center'
+            container.style.backgroundColor = '#ffffff'
+            container.style.padding = '0'
+            container.style.margin = '0'
+            container.style.overflow = 'hidden'
+            container.style.zIndex = '-9999' // Hide from view
+
+            // Add the clone to the container
+            container.appendChild(clone)
+            document.body.appendChild(container)
+
+            // Use html2canvas with improved settings
+            const canvas = await html2canvas(clone, {
+              scale: 2, // Higher scale for better quality
+              backgroundColor: '#ffffff',
+              useCORS: true,
+              allowTaint: true,
+              logging: false,
+              imageTimeout: 0,
+              removeContainer: false // We'll handle removal ourselves
+            })
+
+            // Clean up the DOM
+            document.body.removeChild(container)
+
+            const imgData = canvas.toDataURL('image/png')
+            const pngImage = await pdfDoc.embedPng(imgData)
+
+            // Add a new page for each receipt type
+            const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
+
+            // Calculate dimensions to perfectly center the image
+            const imgWidth = pngImage.width
+            const imgHeight = pngImage.height
+            const scale = Math.min(PAGE_WIDTH / imgWidth, PAGE_HEIGHT / imgHeight) * 0.98 // 98% of max size for small margin
+            const drawWidth = imgWidth * scale
+            const drawHeight = imgHeight * scale
+
+            // Precisely center the image on the page
+            const x = (PAGE_WIDTH - drawWidth) / 2
+            const y = (PAGE_HEIGHT - drawHeight) / 2
+
+            // Draw the image with exact positioning
+            page.drawImage(pngImage, {
+              x,
+              y,
+              width: drawWidth,
+              height: drawHeight
+            })
+          }
+        }
+      } else {
+        // Single receipt mode - original behavior
+        const receiptEl = document.querySelector('[id^="receipt-"]') as HTMLElement | null
+        if (!receiptEl) {
+          toast.error('Receipt element not found')
+          return
+        }
+        // Clone and clean oklch colors
+        const clone = receiptEl.cloneNode(true) as HTMLElement
+        stripOKLCH(clone)
+
+        // Set exact A4 dimensions and center content
+        clone.style.width = '794px' // A4 width in pixels
+        clone.style.height = '1123px' // A4 height in pixels
+        clone.style.backgroundColor = '#ffffff'
+        clone.style.margin = '0 auto' // Center horizontally
+        clone.style.position = 'relative' // Ensure proper positioning
+        clone.style.transform = 'none' // Remove any transforms that might cause tilting
+
+        // Create a container with proper centering and alignment
+        const container = document.createElement('div')
+        container.style.position = 'absolute'
+        container.style.top = '0'
+        container.style.left = '0'
+        container.style.width = '100%'
+        container.style.height = '100%'
+        container.style.display = 'flex'
+        container.style.justifyContent = 'center'
+        container.style.alignItems = 'center'
+        container.style.backgroundColor = '#ffffff'
+        container.style.padding = '0'
+        container.style.margin = '0'
+        container.style.overflow = 'hidden'
+        container.style.zIndex = '-9999' // Hide from view
+
+        // Add the clone to the container
+        container.appendChild(clone)
+        document.body.appendChild(container)
+
+        // Use html2canvas with improved settings
+        const canvas = await html2canvas(clone, {
+          scale: 2, // Higher scale for better quality
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          imageTimeout: 0,
+          removeContainer: false // We'll handle removal ourselves
+        })
+
+        // Clean up the DOM
+        document.body.removeChild(container)
+
+        const imgData = canvas.toDataURL('image/png')
+        const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
+        const pngImage = await pdfDoc.embedPng(imgData)
+
+        // Calculate dimensions to perfectly center the image
+        const imgWidth = pngImage.width
+        const imgHeight = pngImage.height
+        const scale = Math.min(PAGE_WIDTH / imgWidth, PAGE_HEIGHT / imgHeight) * 0.98 // 98% of max size for small margin
+        const drawWidth = imgWidth * scale
+        const drawHeight = imgHeight * scale
+
+        // Precisely center the image on the page
+        const x = (PAGE_WIDTH - drawWidth) / 2
+        const y = (PAGE_HEIGHT - drawHeight) / 2
+
+        // Draw the image with exact positioning
+        page.drawImage(pngImage, {
+          x,
+          y,
+          width: drawWidth,
+          height: drawHeight
+        })
+      }
 
       const pdfBytes = await pdfDoc.save()
 
       // Build filename as patientNAME_date.pdf  (e.g., John_Doe_2025-07-16.pdf)
       const dateStr = new Date().toISOString().slice(0, 19)
       // Get patient name from receipt element or use default
-      let patientNameValue = 'Receipt'
-      const nameNode = receiptEl.querySelector('[data-patient-name]') as HTMLElement | null
-      if (nameNode?.textContent) {
-        patientNameValue = nameNode.textContent.trim()
+      let patientNameValue = patientName || 'Receipt'
+
+      // Try to get patient name from DOM if available
+      const firstReceiptEl = document.querySelector('[id^="receipt-"]') as HTMLElement | null
+      if (firstReceiptEl) {
+        const nameNode = firstReceiptEl.querySelector('[data-patient-name]') as HTMLElement | null
+        if (nameNode?.textContent) {
+          patientNameValue = nameNode.textContent.trim()
+        }
       }
       patientNameValue = patientNameValue.replace(/\s+/g, '_')
-      const fileName = `${patientNameValue}_${reportType}_${dateStr}.pdf`
+      // For report mode, use 'report' as the type, otherwise use the current receipt type
+      const fileType = isReportMode
+        ? 'report'
+        : document.querySelector('[id^="receipt-"]')?.id.split('-')[1] || 'receipt'
+      const fileName = `${patientNameValue}_${fileType}_${dateStr}.pdf`
 
       // Attempt silent save if Node fs API is available (Electron renderer with contextIsolation disabled)
       let savedSilently = false
@@ -681,44 +863,43 @@ const ReceiptOptions: React.FC<ReceiptOptionsProps> = ({
         </div>
       </div>
 
-      {reportType && (
-        <div className="flex gap-2 mt-2">
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-1 px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+      {/* Always show action buttons when a report is selected, not conditionally based on reportType */}
+      <div className="flex gap-2 mt-2">
+        <button
+          onClick={handlePrint}
+          className="flex items-center gap-1 px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm0 0V9a2 2 0 012-2h6a2 2 0 012 2v9m-6 0a2 2 0 002 2h0a2 2 0 002-2"
-              />
-            </svg>
-            Print
-          </button>
-          <button
-            onClick={sendWhatsAppMessage}
-            className="flex items-center gap-1 px-3 py-1 text-sm bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm0 0V9a2 2 0 012-2h6a2 2 0 012 2v9m-6 0a2 2 0 002 2h0a2 2 0 002-2"
+            />
+          </svg>
+          Print
+        </button>
+        <button
+          onClick={sendWhatsAppMessage}
+          className="flex items-center gap-1 px-3 py-1 text-sm bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-4 w-4"
+            fill="currentColor"
+            viewBox="0 0 24 24"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.72.045.419-.1.824zm-3.423-14.416c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm.029 18.88c-1.161 0-2.305-.292-3.318-.844l-3.677.964.984-3.595c-.607-1.052-.927-2.246-.926-3.468.001-3.825 3.113-6.937 6.937-6.937 1.856.001 3.598.723 4.907 2.034 1.31 1.311 2.031 3.054 2.03 4.908-.001 3.825-3.113 6.938-6.937 6.938z" />
-            </svg>
-            WhatsApp
-          </button>
-        </div>
-      )}
+            <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.72.045.419-.1.824zm-3.423-14.416c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm.029 18.88c-1.161 0-2.305-.292-3.318-.844l-3.677.964.984-3.595c-.607-1.052-.927-2.246-.926-3.468.001-3.825 3.113-6.937 6.937-6.937 1.856.001 3.598.723 4.907 2.034 1.31 1.311 2.031 3.054 2.03 4.908-.001 3.825-3.113 6.938-6.937 6.938z" />
+          </svg>
+          WhatsApp
+        </button>
+      </div>
 
       {/* WhatsApp Modal */}
       {showWhatsAppModal && (

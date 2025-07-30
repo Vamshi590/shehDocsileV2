@@ -18,6 +18,7 @@ interface PatientData {
   guardianName?: string
   age: string
   address: string
+  referredBy?: string
   mobile: string
   doctorName: string
   department: string
@@ -153,9 +154,10 @@ export default function DischargeSummary({
           <h3 className="text-xs font-bold mb-3">PATIENT INFORMATION</h3>
           {/* grid-based layout */}
           <div className="text-[11px] grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
+            {/* Patient Name */}
             <div>
-              <div className="font-bold">BILL NO</div>
-              <div>{billNumber}</div>
+              <div className="font-bold">PATIENT NAME</div>
+              <div>{patientData.patientName}</div>
             </div>
             {/* Patient ID */}
             <div>
@@ -167,10 +169,9 @@ export default function DischargeSummary({
               <div className="font-bold">DATE</div>
               <div>{patientData.date}</div>
             </div>
-            {/* Patient Name */}
             <div>
-              <div className="font-bold">PATIENT NAME</div>
-              <div>{patientData.patientName}</div>
+              <div className="font-bold">BILL NO</div>
+              <div>{billNumber}</div>
             </div>
             {/* Gender */}
             <div>
@@ -179,8 +180,8 @@ export default function DischargeSummary({
             </div>
             {/* Guardian Name */}
             <div>
-              <div className="font-bold">GUARDIAN NAME</div>
-              <div>{patientData.guardianName || ''}</div>
+              <div className="font-bold">REFERRED BY</div>
+              <div>{patientData.referredBy || ''}</div>
             </div>
             {/* Age */}
             <div>

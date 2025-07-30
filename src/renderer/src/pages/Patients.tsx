@@ -196,38 +196,48 @@ const Patients: React.FC = () => {
 
       console.log('Adding receipt with data:', receiptData)
       const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
-      const result = await api.addPrescription(receiptData)
-      console.log('Receipt creation result:', result)
-
-      // Create a receipt object directly from the form data and API result
-      const createdReceipt: Prescription = {
-        id:
-          typeof result === 'object' && result !== null
-            ? ((result as Record<string, unknown>).id as string)
-            : '',
-        'PATIENT ID': String(selectedPatient?.patientId || formData.patientId || ''),
-        'PATIENT NAME': String(selectedPatient?.name || formData['PATIENT NAME'] || ''),
-        GENDER: String(selectedPatient?.gender || formData.GENDER || ''),
-        AGE: String(selectedPatient?.age || formData.AGE || ''),
-        TYPE: 'RECEIPT',
-        DATE: String(formData.DATE || new Date().toISOString().split('T')[0]),
-        'CREATED BY': String(
-          JSON.parse(localStorage.getItem('currentUser') || '{}')?.fullName || 'Unknown User'
-        ),
-        ...formData
+      const result = (await api.addPrescription(receiptData)) as {
+        success: boolean
+        data: Record<string, unknown> | null
+        message: string
       }
 
-      // Set the created receipt and show print options
-      console.log('Setting last created receipt:', createdReceipt)
-      setLastCreatedReceipt(createdReceipt)
-      setShowPrintOptions(true)
+      console.log('Receipt creation result:', result)
 
-      setShowReceiptForm(false)
-      setShowAddForm(false)
-      toast.success('Receipt added successfully')
+      if (result.success && result.data) {
+        // Create a receipt object from the successful response data
+        const createdReceipt: Prescription = {
+          id: (result.data.id as string) || '',
+          'PATIENT ID': String(selectedPatient?.patientId || formData.patientId || ''),
+          'PATIENT NAME': String(selectedPatient?.name || formData['PATIENT NAME'] || ''),
+          GENDER: String(selectedPatient?.gender || formData.GENDER || ''),
+          AGE: String(selectedPatient?.age || formData.AGE || ''),
+          TYPE: 'RECEIPT',
+          DATE: String(formData.DATE || new Date().toISOString().split('T')[0]),
+          'CREATED BY': String(
+            JSON.parse(localStorage.getItem('currentUser') || '{}')?.fullName || 'Unknown User'
+          ),
+          ...formData
+        }
+
+        // Set the created receipt and show print options
+        console.log('Setting last created receipt:', createdReceipt)
+        setLastCreatedReceipt(createdReceipt)
+        setShowPrintOptions(true)
+
+        setShowReceiptForm(false)
+        setShowAddForm(false)
+        toast.success(result.message || 'Receipt added successfully')
+      } else {
+        // Handle unsuccessful response
+        console.error('Failed to add receipt:', result.message)
+        toast.error(result.message || 'Failed to add receipt')
+      }
     } catch (err) {
       console.error('Error adding receipt:', err)
-      toast.error('Failed to add receipt')
+      toast.error(
+        'Failed to add receipt: ' + (err instanceof Error ? err.message : 'Unknown error')
+      )
     } finally {
       setLoading(false)
     }

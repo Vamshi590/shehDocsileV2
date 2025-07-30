@@ -109,7 +109,7 @@ export const partOptions = [
 ]
 
 export const medicineOptions = [
-  'SOHA- E/D -B/E',
+  'SOHA - E/D -B/E',
   'FLOGEL ULTRA -E/D -B/E',
   'FLOGEL -E/D -B/E',
   'PREDFORTE -E/D -B/E',

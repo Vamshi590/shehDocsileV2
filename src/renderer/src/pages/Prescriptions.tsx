@@ -29,6 +29,11 @@ type Lab = {
   id: string
   [key: string]: unknown
 }
+type ApiResponse<T> = {
+  success: boolean
+  data: T
+  message: string
+}
 
 // Define the window API interface for TypeScript
 declare global {
@@ -196,13 +201,18 @@ const Prescriptions: React.FC = () => {
         }
 
         // Update the existing receipt instead of creating a new record
-        const updatedReceipt = await window.api.updatePrescription(
+        const updatedReceipt = (await window.api.updatePrescription(
           receiptId,
           updatedReceiptData as Prescription
-        )
+        )) as unknown as ApiResponse<Prescription>
+
+        if (!updatedReceipt.success || !updatedReceipt.data) {
+          toast.error(updatedReceipt.message)
+          return
+        }
 
         // Update the current receipt in state
-        setCurrentReceipt(updatedReceipt)
+        setCurrentReceipt(updatedReceipt.data)
 
         // Close form and show success message
         await loadPrescriptions()
@@ -236,11 +246,16 @@ const Prescriptions: React.FC = () => {
         }
 
         console.log('Creating new receipt with patient details and prescription data:', receiptData)
-        const newReceipt = await window.api.addPrescription(receiptData)
-        console.log('Created new receipt with patient details and prescription data:', newReceipt)
-
+        const newReceipt = (await window.api.addPrescription(
+          receiptData
+        )) as unknown as ApiResponse<Prescription>
         // Set this as the current receipt
-        setCurrentReceipt(newReceipt)
+        if (!newReceipt.success || !newReceipt.data) {
+          toast.error(newReceipt.message)
+          return
+        }
+
+        setCurrentReceipt(newReceipt.data as Prescription)
 
         // Close form and show success message
         await loadPrescriptions()
@@ -261,11 +276,18 @@ const Prescriptions: React.FC = () => {
         }
 
         console.log('Creating new receipt with form data only:', receiptData)
-        const newReceipt = await window.api.addPrescription(receiptData)
-        console.log('Created new receipt with form data only:', newReceipt)
+        const result = (await window.api.addPrescription(
+          receiptData
+        )) as unknown as ApiResponse<Prescription>
+        console.log('Created new receipt with form data only:', result)
 
-        // Set this as the current receipt
-        setCurrentReceipt(newReceipt)
+        // Set this as the current receipt if successful
+        if (!result.success || !result.data) {
+          toast.error(result.message || 'Failed to add receipt')
+          return
+        }
+
+        setCurrentReceipt(result.data as Prescription)
         await loadPrescriptions()
         setShowAddForm(false)
         setError('')
@@ -419,11 +441,18 @@ const Prescriptions: React.FC = () => {
       console.log('Final receipt data to be saved:', receiptData)
 
       // Add the receipt and get the newly created receipt with its ID
-      const newReceipt = await window.api.addPrescription(receiptData)
-      console.log('Added receipt with patient details:', newReceipt)
+      const result = (await window.api.addPrescription(
+        receiptData
+      )) as unknown as ApiResponse<Prescription>
+      console.log('Added receipt with patient details:', result)
 
-      // Set this as the current receipt we're working with
-      setCurrentReceipt(newReceipt)
+      // Set this as the current receipt we're working with if successful
+      if (!result.success || !result.data) {
+        toast.error(result.message || 'Failed to add receipt')
+        return
+      }
+
+      setCurrentReceipt(result.data as Prescription)
 
       // Hide the receipt form after creating
       setShowReceiptForm(false)
@@ -496,15 +525,20 @@ const Prescriptions: React.FC = () => {
 
         console.log('Updating receipt with reading data:', updatedReceiptData)
         // Update the existing receipt instead of creating a new record
-        const updatedReceipt = await window.api.updatePrescription(
+        const updatedReceipt = (await window.api.updatePrescription(
           receiptId,
           updatedReceiptData as Prescription
-        )
+        )) as unknown as ApiResponse<Prescription>
         console.log('Updated receipt with reading data:', updatedReceipt)
 
+        if (!updatedReceipt.success || !updatedReceipt.data) {
+          toast.error(updatedReceipt.message)
+          return
+        }
+
         // Update the current receipt in state
-        if (updatedReceipt) {
-          setCurrentReceipt(updatedReceipt)
+        if (updatedReceipt.success && updatedReceipt.data) {
+          setCurrentReceipt(updatedReceipt.data)
           setHasEyeReading(true)
           toast.success('Eye reading added successfully')
         }
@@ -519,14 +553,18 @@ const Prescriptions: React.FC = () => {
         }
 
         console.log('Creating new receipt with patient details and reading data:', receiptData)
-        const newReceipt = await window.api.addPrescription(receiptData)
-        console.log('Created new receipt with patient details and reading data:', newReceipt)
+        const result = (await window.api.addPrescription(
+          receiptData
+        )) as unknown as ApiResponse<Prescription>
+        console.log('Created new receipt with patient details and reading data:', result)
 
-        // Set this as the current receipt
-        if (newReceipt) {
-          setCurrentReceipt(newReceipt)
+        // Set this as the current receipt if successful
+        if (result.success && result.data) {
+          setCurrentReceipt(result.data as Prescription)
           setHasEyeReading(true)
-          toast.success('Eye reading added successfully')
+          toast.success(result.message || 'Eye reading added successfully')
+        } else {
+          toast.error(result.message || 'Failed to add eye reading')
         }
       } else {
         // Create a new receipt with just the reading data
@@ -537,14 +575,18 @@ const Prescriptions: React.FC = () => {
         }
 
         console.log('Creating new receipt with reading data only:', receiptData)
-        const newReceipt = await window.api.addPrescription(receiptData)
-        console.log('Created new receipt with reading data only:', newReceipt)
+        const result = (await window.api.addPrescription(
+          receiptData
+        )) as unknown as ApiResponse<Prescription>
+        console.log('Created new receipt with reading data only:', result)
 
-        // Set this as the current receipt
-        if (newReceipt) {
-          setCurrentReceipt(newReceipt)
+        // Set this as the current receipt if successful
+        if (result.success && result.data) {
+          setCurrentReceipt(result.data as Prescription)
           setHasEyeReading(true)
-          toast.success('Eye reading added successfully')
+          toast.success(result.message || 'Eye reading added successfully')
+        } else {
+          toast.error(result.message || 'Failed to add eye reading')
         }
       }
 
@@ -568,9 +610,12 @@ const Prescriptions: React.FC = () => {
         'UPDATED BY': getCurrentUser(),
         'UPDATED AT': new Date().toISOString()
       }
-      const updatedPrescription = await window.api.updatePrescription(id, prescription)
-      if (updatedPrescription) {
-        setPrescriptions(prescriptions.map((p) => (p.id === id ? updatedPrescription : p)))
+      const updatedPrescription = (await window.api.updatePrescription(
+        id,
+        prescription
+      )) as unknown as ApiResponse<Prescription>
+      if (updatedPrescription.success && updatedPrescription.data) {
+        setPrescriptions(prescriptions.map((p) => (p.id === id ? updatedPrescription.data : p)))
         setIsModalOpen(false)
         setEditingPrescription(null)
         setShowAddForm(false)
@@ -596,13 +641,16 @@ const Prescriptions: React.FC = () => {
         'UPDATED BY': getCurrentUser(),
         'UPDATED AT': new Date().toISOString()
       }
-      const updatedEyeReading = await window.api.updatePrescription(id, eyeReading)
-      if (updatedEyeReading) {
-        setPrescriptions(prescriptions.map((p) => (p.id === id ? updatedEyeReading : p)))
+      const updatedEyeReading = (await window.api.updatePrescription(
+        id,
+        eyeReading
+      )) as unknown as ApiResponse<Prescription>
+      if (updatedEyeReading.success && updatedEyeReading.data) {
+        setPrescriptions(prescriptions.map((p) => (p.id === id ? updatedEyeReading.data : p)))
 
         // If this is the current receipt, update it
         if (currentReceipt && currentReceipt.id === id) {
-          setCurrentReceipt(updatedEyeReading)
+          setCurrentReceipt(updatedEyeReading.data)
         }
         setIsEyeReadingModalOpen(false)
         setEditingEyeReading(null)

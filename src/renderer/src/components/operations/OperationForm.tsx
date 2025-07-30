@@ -317,7 +317,16 @@ const OperationForm: React.FC<OperationFormProps> = ({ patient, operation, onSav
   // Function to calculate total amount
   const calculateTotalAmount = React.useCallback((): number => {
     if (!Array.isArray(parts) || parts.length === 0) return 0
-    return parts.reduce((total, item) => total + (item?.amount || 0), 0)
+
+    // Calculate the sum with precise handling of floating point values
+    const sum = parts.reduce((total, item) => {
+      // Convert to string first to avoid floating point precision issues
+      const amount = parseFloat((item?.amount || 0).toString())
+      return total + amount
+    }, 0)
+
+    // Return the sum with 2 decimal places precision
+    return parseFloat(sum.toFixed(2))
   }, [parts])
 
   // Update total amount when parts change
@@ -331,27 +340,46 @@ const OperationForm: React.FC<OperationFormProps> = ({ patient, operation, onSav
 
   // Update amount due whenever total, discount, advance or received changes
   useEffect(() => {
-    const due =
-      (formData.totalAmount || 0) - (formData.discount || 0) - (formData.amountReceived || 0)
-    setFormData((prev) => ({
-      ...prev,
-      amountDue: due
-    }))
+    // Use parseFloat and toFixed to ensure consistent precision and avoid floating point errors
+    const total = parseFloat((formData.totalAmount || 0).toString())
+    const discount = parseFloat((formData.discount || 0).toString())
+    const received = parseFloat((formData.amountReceived || 0).toString())
+
+    // Calculate with precise values
+    const due = parseFloat((total - discount - received).toFixed(2))
+
+    // Only update if the value has actually changed to prevent unnecessary re-renders
+    if (formData.amountDue !== due) {
+      setFormData((prev) => ({
+        ...prev,
+        amountDue: due
+      }))
+    }
   }, [formData.totalAmount, formData.discount, formData.amountReceived])
 
-  // Handle input changes
   // Handle input changes
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ): void => {
     const { name, value } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]:
-        name === 'discount' || name === 'advanceAmount' || name === 'amountReceived'
-          ? Number(value)
-          : value
-    }))
+
+    // For financial fields, preserve the exact value entered by the user
+    // without automatic conversion that might cause rounding issues
+    if (name === 'discount' || name === 'amountReceived' || name === 'totalAmount') {
+      // Only convert to number if the value is not empty
+      const numericValue = value === '' ? '' : parseFloat(value)
+
+      setFormData((prev) => ({
+        ...prev,
+        [name]: numericValue
+      }))
+    } else {
+      // For other fields, handle normally
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value
+      }))
+    }
   }
 
   // Handle part selection
@@ -755,7 +783,7 @@ const OperationForm: React.FC<OperationFormProps> = ({ patient, operation, onSav
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Patient Information (Read-only) */}
-          <div className="md:col-span-2 p-4 bg-blue-50 rounded-md">
+          <div className="md:col-span-2 p-4 bg-blue-50 rounded-md border border-gray-200">
             <h3 className="text-md font-medium mb-2">Patient Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -774,170 +802,175 @@ const OperationForm: React.FC<OperationFormProps> = ({ patient, operation, onSav
               </div>
             </div>
           </div>
+          <div className="md:col-span-2 p-4 bg-gray-50 rounded-md border border-gray-200">
+            {/* Date and Time of Admit */}
 
-          {/* Date and Time of Admit */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Date of Admit *</label>
-            <input
-              type="date"
-              name="dateOfAdmit"
-              value={formData.dateOfAdmit || ''}
-              onChange={handleInputChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+            <div className="flex items-center w-full space-x-6 mt-4">
+              <div className="w-1/2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Date of Admit *
+                </label>
+                <input
+                  type="date"
+                  name="dateOfAdmit"
+                  value={formData.dateOfAdmit || ''}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Time of Admit</label>
-            <input
-              type="time"
-              name="timeOfAdmit"
-              value={formData.timeOfAdmit || ''}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+              <div className="w-1/2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Time of Admit
+                </label>
+                <input
+                  type="time"
+                  name="timeOfAdmit"
+                  value={formData.timeOfAdmit || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
 
-          {/* Date and Time of Operation */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Date of Operation *
-            </label>
-            <input
-              type="date"
-              name="dateOfOperation"
-              value={formData.dateOfOperation || ''}
-              onChange={handleInputChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+            <div className="flex items-center w-full space-x-6 mt-4">
+              {/* Date and Time of Operation */}
+              <div className="w-1/2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Date of Operation *
+                </label>
+                <input
+                  type="date"
+                  name="dateOfOperation"
+                  value={formData.dateOfOperation || ''}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Time of Operation
-            </label>
-            <input
-              type="time"
-              name="timeOfOperation"
-              value={formData.timeOfOperation || ''}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+              <div className="w-1/2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Time of Operation
+                </label>
+                <input
+                  type="time"
+                  name="timeOfOperation"
+                  value={formData.timeOfOperation || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
 
-          {/* Date and Time of Discharge */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Date of Discharge
-            </label>
-            <input
-              type="date"
-              name="dateOfDischarge"
-              value={formData.dateOfDischarge || ''}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+            <div className="flex items-center w-full space-x-6 mt-4">
+              {/* Date and Time of Discharge */}
+              <div className="w-1/2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Date of Discharge
+                </label>
+                <input
+                  type="date"
+                  name="dateOfDischarge"
+                  value={formData.dateOfDischarge || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Time of Discharge
-            </label>
-            <input
-              type="time"
-              name="timeOfDischarge"
-              value={formData.timeOfDischarge || ''}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+              <div className="w-1/2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Time of Discharge
+                </label>
+                <input
+                  type="time"
+                  name="timeOfDischarge"
+                  value={formData.timeOfDischarge || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
 
-          {/* Diagnosis */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Diagnosis *</label>
-            <EditableCombobox
-              id="provisionDiagnosis"
-              name="provisionDiagnosis"
-              value={(formData['provisionDiagnosis'] as string) || ''}
-              options={dynamicProvisionDiagnosisOptions}
-              onChange={handleInputChange}
-              onAddNewOption={(_, value) =>
-                addNewOptionPermanently('provisionDiagnosisOptions', value)
-              }
-              placeholder="Select or type previous history..."
-            />
-          </div>
+            <div className="flex items-center w-full space-x-6 mt-4">
+              {/* Diagnosis */}
+              <div className="w-1/2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Diagnosis *</label>
+                <EditableCombobox
+                  id="provisionDiagnosis"
+                  name="provisionDiagnosis"
+                  value={(formData['provisionDiagnosis'] as string) || ''}
+                  options={dynamicProvisionDiagnosisOptions}
+                  onChange={handleInputChange}
+                  onAddNewOption={(_, value) =>
+                    addNewOptionPermanently('provisionDiagnosisOptions', value)
+                  }
+                  placeholder="Select or type previous history..."
+                  className="bg-white"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Operation Procedure *
-            </label>
-            <EditableCombobox
-              id="operationProcedure"
-              name="operationProcedure"
-              value={(formData['operationProcedure'] as string) || ''}
-              options={dynamicOperationProcedureOptions}
-              onChange={handleInputChange}
-              onAddNewOption={(_, value) =>
-                addNewOptionPermanently('operationProcedureOptions', value)
-              }
-              placeholder="Select or type previous history..."
-            />
-          </div>
+              <div className="w-1/2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Operation Procedure *
+                </label>
+                <EditableCombobox
+                  id="operationProcedure"
+                  name="operationProcedure"
+                  value={(formData['operationProcedure'] as string) || ''}
+                  options={dynamicOperationProcedureOptions}
+                  onChange={handleInputChange}
+                  onAddNewOption={(_, value) =>
+                    addNewOptionPermanently('operationProcedureOptions', value)
+                  }
+                  placeholder="Select or type previous history..."
+                  className="bg-white"
+                />
+              </div>
+            </div>
 
-          {/* Operation Details and Procedure */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Operation Details *
-            </label>
-            <EditableCombobox
-              id="operationDetails"
-              name="operationDetails"
-              value={(formData['operationDetails'] as string) || ''}
-              options={dynamicOperationDetailsOptions}
-              onChange={handleInputChange}
-              onAddNewOption={(_, value) =>
-                addNewOptionPermanently('operationDetailsOptions', value)
-              }
-              placeholder="Select or type previous history..."
-            />
-            {/* <div className="relative">
-              <input
-                type="text"
-                name="operationDetails"
-                id="operationDetails"
-                list="operationDetailsList"
-                value={formData.operationDetails || ''}
-                onChange={handleInputChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <datalist id="operationDetailsList">
-                {operationDetailsOptions.map((option, index) => (
-                  <option key={index} value={option} />
-                ))}
-              </datalist>
-            </div> */}
-          </div>
+            <div className="flex items-center w-full space-x-6 mt-4">
+              {/* Operation Details and Procedure */}
+              <div className="w-1/2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Operation Details *
+                </label>
+                <EditableCombobox
+                  id="operationDetails"
+                  name="operationDetails"
+                  value={(formData['operationDetails'] as string) || ''}
+                  options={dynamicOperationDetailsOptions}
+                  onChange={handleInputChange}
+                  onAddNewOption={(_, value) =>
+                    addNewOptionPermanently('operationDetailsOptions', value)
+                  }
+                  placeholder="Select or type previous history..."
+                  className="bg-white"
+                />
+              </div>
 
-          {/* Operated By */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Operated By *</label>
-            <EditableCombobox
-              id="operatedBy"
-              name="operatedBy"
-              value={(formData['operatedBy'] as string) || ''}
-              options={dynamicDoctorOptions}
-              onChange={handleInputChange}
-              onAddNewOption={(_, value) => addNewOptionPermanently('doctorName', value)}
-              placeholder="Select or type previous history..."
-            />
+              {/* Operated By */}
+              <div className="w-1/2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Operated By *
+                </label>
+                <EditableCombobox
+                  id="operatedBy"
+                  name="operatedBy"
+                  value={(formData['operatedBy'] as string) || ''}
+                  options={dynamicDoctorOptions}
+                  onChange={handleInputChange}
+                  onAddNewOption={(_, value) => addNewOptionPermanently('doctorName', value)}
+                  placeholder="Select or type previous history..."
+                  className="bg-white"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Parts and Amounts */}
-          <div className="col-span-2 mt-4">
+          <div className="col-span-2 mt-4 bg-gray-50 rounded-md border border-gray-300 p-4">
             <h3 className="text-lg font-semibold mb-2">Parts and Services</h3>
             <div className="space-y-4">
               {/* Make sure parts array is valid and has at least one entry */}
@@ -947,7 +980,7 @@ const OperationForm: React.FC<OperationFormProps> = ({ patient, operation, onSav
               ).map((item, index) => (
                 <div
                   key={index}
-                  className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 p-3 bg-gray-50 rounded-md"
+                  className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 p-3  rounded-md"
                 >
                   <div className="col-span-2">
                     <label
@@ -963,6 +996,7 @@ const OperationForm: React.FC<OperationFormProps> = ({ patient, operation, onSav
                       options={partOptions}
                       onChange={(e) => handlePartChange(index, e.target.value)}
                       placeholder="Select or type medicine name, dosage..."
+                      className="bg-white"
                     />
                     {/* <div className="relative">
                       <input
@@ -1048,106 +1082,111 @@ const OperationForm: React.FC<OperationFormProps> = ({ patient, operation, onSav
           </div>
           {/*financial details*/}
 
-          {/* Additional Financial Fields */}
-          <div className="col-span-2 flex flex-row w-full gap-4 mt-4">
-            {/* Total Amount */}
-            <div className="w-1/2">
-              <label htmlFor="totalAmount" className="block text-sm font-medium text-gray-700 mb-1">
-                Total Amount
-              </label>
-              <input
-                type="number"
-                id="totalAmount"
-                name="totalAmount"
-                value={formData.totalAmount || 0}
-                readOnly
-                className="block w-full py-2 px-3 border border-gray-300 bg-gray-100 rounded-md shadow-sm sm:text-sm"
-              />
+          <div className="col-span-2 bg-gray-50 rounded-md border border-gray-300 p-4">
+            {/* Additional Financial Fields */}
+            <div className="col-span-2 flex flex-row w-full gap-4 mt-4">
+              {/* Total Amount */}
+              <div className="w-1/2">
+                <label
+                  htmlFor="totalAmount"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Total Amount
+                </label>
+                <input
+                  type="number"
+                  id="totalAmount"
+                  name="totalAmount"
+                  value={formData.totalAmount || 0}
+                  readOnly
+                  className="block w-full py-2 px-3 border border-gray-300  bg-white rounded-md shadow-sm sm:text-sm"
+                />
+              </div>
+
+              <div className="w-1/2">
+                <label
+                  htmlFor="amountReceived"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Amount Received
+                </label>
+                <input
+                  type="number"
+                  id="amountReceived"
+                  name="amountReceived"
+                  value={formData.amountReceived || 0}
+                  onChange={handleInputChange}
+                  className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm sm:text-sm"
+                />
+              </div>
             </div>
 
-            <div className="w-1/2">
-              <label
-                htmlFor="amountReceived"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Amount Received
-              </label>
-              <input
-                type="number"
-                id="amountReceived"
-                name="amountReceived"
-                value={formData.amountReceived || 0}
-                onChange={handleInputChange}
-                className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm sm:text-sm"
-              />
-            </div>
-          </div>
+            <div className="col-span-2 flex flex-row w-full gap-4 mt-4">
+              {/* Mode of Payment */}
+              <div className="w-1/2">
+                <label
+                  htmlFor="modeOfPayment"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Mode of Payment
+                </label>
+                <select
+                  id="modeOfPayment"
+                  name="modeOfPayment"
+                  value={formData.modeOfPayment || ''}
+                  onChange={handleInputChange}
+                  className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                >
+                  <option value="Cash">Cash</option>
+                  <option value="Credit Card">Credit Card</option>
+                  <option value="Debit Card">Debit Card</option>
+                  <option value="UPI">UPI</option>
+                  <option value="Insurance">Insurance</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                </select>
+              </div>
 
-          <div className="col-span-2 flex flex-row w-full gap-4">
-            {/* Mode of Payment */}
-            <div className="w-1/2">
-              <label
-                htmlFor="modeOfPayment"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Mode of Payment
-              </label>
-              <select
-                id="modeOfPayment"
-                name="modeOfPayment"
-                value={formData.modeOfPayment || ''}
-                onChange={handleInputChange}
-                className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              >
-                <option value="Cash">Cash</option>
-                <option value="Credit Card">Credit Card</option>
-                <option value="Debit Card">Debit Card</option>
-                <option value="UPI">UPI</option>
-                <option value="Insurance">Insurance</option>
-                <option value="Bank Transfer">Bank Transfer</option>
-              </select>
+              {/* Discount */}
+              <div className="w-1/2">
+                <label htmlFor="discount" className="block text-sm font-medium text-gray-700 mb-1">
+                  Discount
+                </label>
+                <input
+                  type="number"
+                  id="discount"
+                  name="discount"
+                  value={formData.discount || ''}
+                  onChange={handleInputChange}
+                  className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
             </div>
 
-            {/* Discount */}
-            <div className="w-1/2">
-              <label htmlFor="discount" className="block text-sm font-medium text-gray-700 mb-1">
-                Discount
-              </label>
-              <input
-                type="number"
-                id="discount"
-                name="discount"
-                value={formData.discount || ''}
-                onChange={handleInputChange}
-                className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="col-span-2 flex flex-row w-full gap-4">
-            {/* Amount Due */}
-            <div className="w-1/2">
-              <label htmlFor="amountDue" className="block text-sm font-medium text-gray-700 mb-1">
-                Amount Due
-              </label>
-              <input
-                type="number"
-                id="amountDue"
-                name="amountDue"
-                value={formData.amountDue || 0}
-                readOnly
-                className="block w-full py-2 px-3 border border-gray-300 bg-gray-100 rounded-md shadow-sm sm:text-sm"
-              />
-            </div>
-            <div className="w-1/2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Review On</label>
-              <input
-                type="date"
-                name="reviewOn"
-                value={formData.reviewOn || ''}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+            <div className="col-span-2 flex flex-row w-full gap-4 mt-4">
+              {/* Amount Due */}
+              <div className="w-1/2">
+                <label htmlFor="amountDue" className="block text-sm font-medium text-gray-700 mb-1">
+                  Amount Due
+                </label>
+                <input
+                  type="number"
+                  id="amountDue"
+                  name="amountDue"
+                  value={formData.amountDue || 0}
+                  readOnly
+                  className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm sm:text-sm"
+                />
+              </div>
+              <div className="w-1/2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Review On</label>
+                <input
+                  type="date"
+                  name="reviewOn"
+                  value={formData.reviewOn || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
           </div>
         </div>

@@ -409,6 +409,8 @@ const Operations: React.FC = () => {
         // Reset form and UI state
         setShowOperationForm(false)
         setSelectedOperation(null)
+        setSelectedPatient(null)
+        setSearchTerm('')
         toast.success('Operation added successfully')
       } else {
         console.error('Failed to add operation:', response?.message || 'Unknown error')
@@ -455,6 +457,8 @@ const Operations: React.FC = () => {
 
           setShowOperationForm(false)
           setSelectedOperation(null)
+          setSelectedPatient(null)
+          setSearchTerm('')
         } else {
           console.error('Failed to update operation:', response.message)
           setError(`Failed to update operation: ${response.message}`)
@@ -777,7 +781,7 @@ const Operations: React.FC = () => {
               </div>
 
               {/* Patient Information Table */}
-              <div className="overflow-x-auto mb-6">
+              <div className="overflow-x-auto mb-6 border border-gray-200 rounded-lg">
                 <table className="min-w-full divide-y divide-gray-200">
                   <tbody className="bg-white divide-y divide-gray-200">
                     {/* Display all patient fields dynamically */}
