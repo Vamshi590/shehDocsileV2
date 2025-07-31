@@ -600,20 +600,65 @@ const Prescriptions: React.FC = () => {
     }
   }
 
+  // Helper function to extract only the changed fields from form data compared to original data
+  // This prevents unnecessary updates and reduces the risk of overwriting concurrent changes
+  const getChangedFieldsOnly = (
+    originalData: Record<string, unknown>,
+    formData: Record<string, unknown>
+  ): Record<string, unknown> => {
+    // Start with just the ID to ensure we're updating the right record
+    const changedFields: Record<string, unknown> = {
+      id: formData.id || originalData.id
+    }
+
+    // Only include fields that have actually changed
+    Object.entries(formData).forEach(([key, value]) => {
+      // Skip the id field as we've already included it
+      if (key !== 'id' && value !== undefined) {
+        // Check if the value has actually changed
+        if (JSON.stringify(originalData[key]) !== JSON.stringify(value)) {
+          changedFields[key] = value
+        }
+      }
+    })
+
+    return changedFields
+  }
+
   // Function to handle updating a prescription
   const handleUpdatePrescription = async (prescription: Prescription): Promise<void> => {
     try {
       setLoading(true)
       const id = prescription.id
-      prescription = {
-        ...prescription,
+
+      // First, fetch the latest version of the prescription from the database
+      const response = await window.api.getPrescriptions()
+      const latestData = Array.isArray(response) ? response.find((p) => p.id === id) : null
+
+      if (!latestData) {
+        throw new Error('Prescription not found')
+      }
+
+      // Extract only the fields that have actually changed
+      const changedFieldsOnly = getChangedFieldsOnly(latestData, prescription)
+
+      // Add update metadata to the changed fields only
+      const updatedPrescriptionData = {
+        ...changedFieldsOnly,
         'UPDATED BY': getCurrentUser(),
         'UPDATED AT': new Date().toISOString()
       }
+
+      // Log what fields are being updated
+      console.log('Updating only these fields:', updatedPrescriptionData)
+
+      // Update the prescription in the database with only the changed fields
+      // Ensure id is included to satisfy TypeScript's Prescription type requirements
       const updatedPrescription = (await window.api.updatePrescription(
         id,
-        prescription
+        updatedPrescriptionData as unknown as Prescription
       )) as unknown as ApiResponse<Prescription>
+
       if (updatedPrescription.success && updatedPrescription.data) {
         setPrescriptions(prescriptions.map((p) => (p.id === id ? updatedPrescription.data : p)))
         setIsModalOpen(false)
@@ -626,6 +671,7 @@ const Prescriptions: React.FC = () => {
     } catch (err) {
       console.error('Error updating prescription:', err)
       setError('Failed to update prescription')
+      toast.error('Failed to update prescription. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -636,15 +682,35 @@ const Prescriptions: React.FC = () => {
     try {
       setLoading(true)
       const id = eyeReading.id
-      eyeReading = {
-        ...eyeReading,
+
+      // First, fetch the latest version of the eye reading from the database
+      const response = await window.api.getPrescriptions()
+      const latestData = Array.isArray(response) ? response.find((p) => p.id === id) : null
+
+      if (!latestData) {
+        throw new Error('Eye reading not found')
+      }
+
+      // Extract only the fields that have actually changed
+      const changedFieldsOnly = getChangedFieldsOnly(latestData, eyeReading)
+
+      // Add update metadata to the changed fields only
+      const updatedEyeReadingData = {
+        ...changedFieldsOnly,
         'UPDATED BY': getCurrentUser(),
         'UPDATED AT': new Date().toISOString()
       }
+
+      // Log what fields are being updated
+      console.log('Updating only these eye reading fields:', updatedEyeReadingData)
+
+      // Update the eye reading in the database with only the changed fields
+      // Use double casting to avoid TypeScript errors
       const updatedEyeReading = (await window.api.updatePrescription(
         id,
-        eyeReading
+        updatedEyeReadingData as unknown as Prescription
       )) as unknown as ApiResponse<Prescription>
+
       if (updatedEyeReading.success && updatedEyeReading.data) {
         setPrescriptions(prescriptions.map((p) => (p.id === id ? updatedEyeReading.data : p)))
 
@@ -661,6 +727,7 @@ const Prescriptions: React.FC = () => {
     } catch (err) {
       console.error('Error updating eye reading:', err)
       setError('Failed to update eye reading')
+      toast.error('Failed to update eye reading. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -668,7 +735,9 @@ const Prescriptions: React.FC = () => {
 
   // Function to find receipts for a patient
   const findReceiptsForPatient = (patientId: string): Prescription[] => {
-    return prescriptions.filter((p) => p.patientId === patientId && p.TYPE === 'RECEIPT')
+    console.log('Finding receipts for patient:', patientId)
+    console.log('Available receipts:', prescriptions)
+    return prescriptions.filter((p) => p['PATIENT ID'] === patientId && p.TYPE === 'RECEIPT')
   }
 
   // Function to handle patient search
@@ -693,7 +762,7 @@ const Prescriptions: React.FC = () => {
 
       // First try to find an exact match by patient ID
       let matchedPatient = patients.find((patient) => {
-        const patientId = String(patient['PATIENT ID'] || '').toLowerCase()
+        const patientId = String(patient['patientId'] || '').toLowerCase()
         return patientId === searchValue
       })
 
@@ -727,7 +796,7 @@ const Prescriptions: React.FC = () => {
         setCurrentReceipt(null)
 
         // Check if this patient has any existing receipts
-        const patientId = String(matchedPatient['PATIENT ID'] || '')
+        const patientId = String(matchedPatient['patientId'] || '')
         const patientReceipts = findReceiptsForPatient(patientId)
         console.log('Existing receipts for patient:', patientReceipts)
 
@@ -758,6 +827,30 @@ const Prescriptions: React.FC = () => {
             <p className="text-sm text-gray-500">Sri Harshini Eye Hospital</p>
           </div>
           <div className="flex items-center space-x-3">
+            <button
+              onClick={() => {
+                loadPatients()
+                loadPrescriptions()
+                toast.success('Data refreshed successfully')
+              }}
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 mr-1"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              Refresh
+            </button>
             <button
               onClick={() => (window.location.hash = '/dashboard')}
               className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
@@ -1549,6 +1642,36 @@ const Prescriptions: React.FC = () => {
           }}
           onSave={handleUpdatePrescription}
           prescriptionCount={prescriptions.length}
+          onRefresh={async () => {
+            try {
+              // Get the latest prescription data from the API
+              const id = editingPrescription.id
+              const response = await window.api.getPrescriptions()
+
+              // Find the prescription with the matching ID
+              let freshPrescription: Prescription | null = null
+              if (Array.isArray(response)) {
+                const foundPrescription = response.find((p) => p.id === id)
+                if (foundPrescription) {
+                  freshPrescription = foundPrescription
+                }
+              }
+
+              if (freshPrescription) {
+                // Update the editing prescription with the fresh data
+                setEditingPrescription(freshPrescription)
+                toast.success('Prescription data refreshed successfully')
+                return freshPrescription
+              } else {
+                toast.error('Failed to refresh prescription data')
+                return null
+              }
+            } catch (error) {
+              console.error('Error refreshing prescription data:', error)
+              toast.error('Error refreshing prescription data')
+              return null
+            }
+          }}
         />
       )}
       {isEyeReadingModalOpen && editingEyeReading && (

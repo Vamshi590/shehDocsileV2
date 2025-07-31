@@ -5,6 +5,7 @@ import ReceiptViewer from '../reports/ReceiptViewer'
 import { saveAs } from 'file-saver'
 import { PDFDocument } from 'pdf-lib'
 import { toast } from 'sonner'
+import Modal from '../common/Modal'
 // Define the Prescription type to match with other components
 type Prescription = {
   id: string
@@ -58,6 +59,10 @@ const PrescriptionTableWithReceipts: React.FC<PrescriptionTableWithReceiptsProps
     readings: false,
     clinical: false
   })
+  // State for confirmation modal
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false)
+  const [deleteConfirmMessage, setDeleteConfirmMessage] = useState<string>('')
+  const [prescriptionToDelete, setPrescriptionToDelete] = useState<string>('')
   // State for managing receipt viewing and operations
 
   // Reset selection if current selection is no longer in filtered list
@@ -512,6 +517,40 @@ const PrescriptionTableWithReceipts: React.FC<PrescriptionTableWithReceiptsProps
 
   const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
 
+  // Helper function to determine patient status based on prescription data
+  const renderPatientStatus = (prescription: Prescription): React.ReactNode => {
+    // Check for AR readings
+    const hasARReadings = [
+      'AR-RE-SPH',
+      'AR-RE-CYL',
+      'AR-RE-AXIS',
+      'AR-RE-VA',
+      'AR-RE-VAC.P.H',
+      'AR-LE-SPH',
+      'AR-LE-CYL',
+      'AR-LE-AXIS',
+      'AR-LE-VA',
+      'AR-LE-VAC.P.H'
+    ].some((field) => prescription[field] && String(prescription[field]).trim() !== '')
+
+    // Check for medical history
+    const hasMedicalHistory = ['PRESENT COMPLAIN', 'PREVIOUS HISTORY'].some(
+      (field) => prescription[field] && String(prescription[field]).trim() !== ''
+    )
+
+    if (!hasARReadings && !hasMedicalHistory) {
+      return <span className="text-red-600 font-medium">Optometrist</span>
+    } else if (hasARReadings && !hasMedicalHistory) {
+      return <span className="text-yellow-500 font-medium">Doctor</span>
+    } else if (hasARReadings && hasMedicalHistory) {
+      return <span className="text-green-600 font-medium">Complete</span>
+    } else if (!hasARReadings && hasMedicalHistory) {
+      return <span className="text-blue-600 font-medium">Medical Only</span>
+    }
+
+    return <span className="text-gray-500">Unknown</span>
+  }
+
   return (
     <div id="main-content" className="space-y-4">
       {/* Receipt Options - Only show when a prescription is selected */}
@@ -656,10 +695,9 @@ const PrescriptionTableWithReceipts: React.FC<PrescriptionTableWithReceiptsProps
                     const patientName = selectedPrescription['PATIENT NAME'] || 'this patient'
                     const confirmMessage = `Are you sure you want to delete the prescription for ${patientName}?\n\nThis will permanently delete all prescription data, readings, and financial information.`
 
-                    if (window.confirm(confirmMessage)) {
-                      onDeletePrescription(selectedPrescription.id as string)
-                      handleCloseReceipt()
-                    }
+                    setDeleteConfirmMessage(confirmMessage)
+                    setPrescriptionToDelete(selectedPrescription.id as string)
+                    setIsDeleteModalOpen(true)
                   }}
                   className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors flex items-center"
                   title="Delete Prescription"
@@ -831,6 +869,12 @@ const PrescriptionTableWithReceipts: React.FC<PrescriptionTableWithReceiptsProps
                 scope="col"
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
+                Status
+              </th>
+              <th
+                scope="col"
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
                 Patient ID
               </th>
               <th
@@ -914,6 +958,9 @@ const PrescriptionTableWithReceipts: React.FC<PrescriptionTableWithReceiptsProps
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {(prescription.DATE as React.ReactNode) || '-'}
                 </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  {renderPatientStatus(prescription)}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {(prescription['PATIENT ID'] as React.ReactNode) || '-'}
                 </td>
@@ -963,6 +1010,38 @@ const PrescriptionTableWithReceipts: React.FC<PrescriptionTableWithReceiptsProps
           </tbody>
         </table>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Confirm Deletion"
+        size="sm"
+      >
+        <div className="py-2">
+          <p className="mb-6 whitespace-pre-line">{deleteConfirmMessage}</p>
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (onDeletePrescription && prescriptionToDelete) {
+                  onDeletePrescription(prescriptionToDelete)
+                  handleCloseReceipt()
+                  setIsDeleteModalOpen(false)
+                }
+              }}
+              className="px-4 py-2 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

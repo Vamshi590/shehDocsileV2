@@ -186,7 +186,6 @@ const CombinedForm = ({
     selectedPatient,
     initialData
 }: ReadingFormProps): JSX.Element => {
-    console.log(selectedPatient)
     // State to control the visibility of the Eye Reading Form section
     const [showEyeReadingForm, setShowEyeReadingForm] = useState<boolean>(true);
     // State for managing visible prescription and advice fields
@@ -428,36 +427,198 @@ const CombinedForm = ({
         }
     }
 
-    // Handle EditableCombobox changes
+    // Store medicine combinations for autofill (medicine name, days, timing)
+    const [medicineCombinations, setMedicineCombinations] = useState<Record<string, { days: string, timing: string }>>({});
+
+    // Load saved medicine combinations from localStorage
+    useEffect(() => {
+        const savedCombinations = localStorage.getItem('medicineCombinations');
+        if (savedCombinations) {
+            try {
+                setMedicineCombinations(JSON.parse(savedCombinations));
+                console.log('Loaded medicine combinations:', JSON.parse(savedCombinations));
+            } catch (error) {
+                console.error('Error loading saved medicine combinations:', error);
+            }
+        }
+    }, []);
+
+    // Track the last changed field and its value for medicine combinations
+    const [lastChanged, setLastChanged] = useState<{
+        prescriptionNum: string;
+        field: 'medicine' | 'days' | 'timing';
+        value: string;
+    } | null>(null);
+
+    // Effect to update medicine combinations when form data changes
+    useEffect(() => {
+        // Only run if we have a last changed field
+        if (!lastChanged) return;
+
+        const { prescriptionNum } = lastChanged;
+        const medicineField = `PRESCRIPTION ${prescriptionNum}`;
+        const daysField = `DAYS ${prescriptionNum}`;
+        const timingField = `TIMING ${prescriptionNum}`;
+
+        // Get current values from form data
+        const medicine = formData[medicineField] as string;
+        const days = formData[daysField] as string;
+        const timing = formData[timingField] as string;
+
+        // Only save if all fields are filled
+        if (medicine && medicine.trim() !== '' && 
+            days && days.trim() !== '' && 
+            timing && timing.trim() !== '') {
+
+            // Create updated combinations - don't depend on current medicineCombinations state
+            // to avoid infinite loop
+            const savedCombinations = localStorage.getItem('medicineCombinations');
+            let currentCombinations = {};
+            
+            try {
+                if (savedCombinations) {
+                    currentCombinations = JSON.parse(savedCombinations);
+                }
+            } catch (error) {
+                console.error('Error parsing saved combinations:', error);
+            }
+            
+            const newCombinations = {
+                ...currentCombinations,
+                [medicine]: { days, timing }
+            };
+            
+            // Save to localStorage first
+            try {
+                localStorage.setItem('medicineCombinations', JSON.stringify(newCombinations));
+                console.log('Saving updated combination for:', medicine, { days, timing });
+                
+                // Then update state - but only if it's different to avoid loop
+                if (JSON.stringify(medicineCombinations[medicine]) !== JSON.stringify({ days, timing })) {
+                    setMedicineCombinations(newCombinations);
+                }
+            } catch (error) {
+                console.error('Error saving medicine combinations:', error);
+            }
+            
+            // Clear the last changed field to prevent repeated updates
+            setLastChanged(null);
+        }
+    }, [formData, lastChanged]);  // Remove medicineCombinations from dependencies
+
+    // Handle EditableCombobox changes with autofill functionality
     const handleComboboxChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
     ): void => {
-        const { name, value } = e.target
-        setFormData((prevData) => ({
+        const { name, value } = e.target;
+        
+        // Update the form data with the new value
+        setFormData(prevData => ({
             ...prevData,
             [name]: value
-        }))
-    }
+        }));
+        
+        // Handle medicine field autofill
+        if (name.startsWith('PRESCRIPTION ')) {
+            const prescriptionNum = name.split(' ')[1];
+            
+            // If we have saved data for this medicine, autofill related fields
+            if (medicineCombinations[value]) {
+                const savedDays = medicineCombinations[value].days;
+                const savedTiming = medicineCombinations[value].timing;
+                
+                // Autofill the days and timing fields if they're empty
+                setFormData(prevData => {
+                    const currentDays = prevData[`DAYS ${prescriptionNum}`] as string;
+                    const currentTiming = prevData[`TIMING ${prescriptionNum}`] as string;
+                    
+                    return {
+                        ...prevData,
+                        [`DAYS ${prescriptionNum}`]: (!currentDays || currentDays === '') ? savedDays : currentDays,
+                        [`TIMING ${prescriptionNum}`]: (!currentTiming || currentTiming === '') ? savedTiming : currentTiming
+                    };
+                });
+            }
+            
+            // Track this change for medicine combination updates
+            setLastChanged({
+                prescriptionNum,
+                field: 'medicine',
+                value
+            });
+        }
+        
+        // Track days field changes
+        else if (name.startsWith('DAYS ')) {
+            const prescriptionNum = name.split(' ')[1];
+            setLastChanged({
+                prescriptionNum,
+                field: 'days',
+                value
+            });
+        }
+        
+        // Track timing field changes
+        else if (name.startsWith('TIMING ')) {
+            const prescriptionNum = name.split(' ')[1];
+            setLastChanged({
+                prescriptionNum,
+                field: 'timing',
+                value
+            });
+        }
+    };
+
+    // Helper function to extract only the changed fields from form data compared to original data
+    // Helper function to compare initial data with current form data
+    const hasFieldChanged = (key: string, currentValue: unknown): boolean => {
+        if (!initialData) return true; // If no initial data, consider everything changed
+        
+        // Handle special case for numeric values
+        if (typeof currentValue === 'number' && typeof initialData[key] === 'string') {
+            return currentValue.toString() !== initialData[key];
+        }
+        
+        // Handle special case for string values
+        if (typeof currentValue === 'string' && typeof initialData[key] === 'number') {
+            return currentValue !== initialData[key].toString();
+        }
+        
+        // Regular comparison
+        return JSON.stringify(currentValue) !== JSON.stringify(initialData[key]);
+    };
+    
 
     // Handle form submission
     const handleSubmit = async (e: React.FormEvent): Promise<void> => {
         e.preventDefault()
 
-        // Prepare the final form data with both eye reading and prescription data
-        const finalFormData = {
-            ...formData,
-            // Include only the visible prescription fields
-            ...Object.fromEntries(
-                Object.entries(formData)
-                    .filter(([key]) =>
-                        (key.startsWith('PRESCRIPTION') && parseInt(key.split(' ')[1]) <= visiblePrescription) ||
-                        (key.startsWith('ADVICE') && parseInt(key.split(' ')[1]) <= visibleAdvice) ||
-                        !key.startsWith('PRESCRIPTION') && !key.startsWith('ADVICE')
-                    )
-            )
+
+             // Filter entries to include only visible prescription/advice fields
+             const visibleEntries = Object.entries(formData).filter(([key]) =>
+                (key.startsWith('PRESCRIPTION') && parseInt(key.split(' ')[1]) <= visiblePrescription) ||
+                (key.startsWith('ADVICE') && parseInt(key.split(' ')[1]) <= visibleAdvice) ||
+                !key.startsWith('PRESCRIPTION') && !key.startsWith('ADVICE')
+            );
+
+        const changedFields: Record<string, unknown> = {};
+
+        // If we have an initialData with an ID, we're updating an existing record
+        if (initialData && initialData.id) {
+            changedFields.id = initialData.id;
         }
 
-        await onSubmit(finalFormData)
+        changedFields.patientId = formData.patientId;
+        
+        visibleEntries.forEach(([key, value]) => {
+            if (hasFieldChanged(key, value)) {
+                changedFields[key] = value;
+            }
+        });
+
+        console.log('Changed fields:', changedFields)
+
+        await onSubmit(changedFields as ReadingFormData)
     }
 
     // Dynamic dropdown options state
@@ -479,14 +640,7 @@ const CombinedForm = ({
           const previousOptions = (previousHistoryOpts as { options?: string[] })?.options || []
           const othersOptions = (othersOpts as { options?: string[] })?.options || []
     
-          console.log(
-            'Present options:',
-            presentOptions,
-            'Previous options:',
-            previousOptions,
-            'Others options:',
-            othersOptions
-          )
+     
     
           setDynamicPresentComplainOptions([...new Set(presentOptions as string[])])
           setDynamicPreviousHistoryOptions([...new Set(previousOptions as string[])])

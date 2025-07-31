@@ -14,13 +14,16 @@ interface PrescriptionEditModalProps {
   onSave: (prescription: Prescription) => Promise<void>
   prescription: Prescription | null
   prescriptionCount: number
+  // Optional function to refresh the prescription data
+  onRefresh?: () => Promise<Prescription | null>
 }
 
 const PrescriptionEditModal: React.FC<PrescriptionEditModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  prescription
+  prescription,
+  onRefresh
 }) => {
   const [activeTab, setActiveTab] = useState<'prescription' | 'receipt' | 'readings'>(
     'prescription'
@@ -28,24 +31,64 @@ const PrescriptionEditModal: React.FC<PrescriptionEditModalProps> = ({
 
   // Create receipt data from prescription data
   const [receiptData, setReceiptData] = useState<Record<string, unknown>>({})
+  const [refreshing, setRefreshing] = useState<boolean>(false)
+
+  // Function to initialize receipt data from prescription
+  const initializeReceiptData = (prescriptionData: Prescription): void => {
+    setReceiptData({
+      // Keep all original prescription data
+      ...prescriptionData,
+      // Ensure these specific receipt fields are included
+      'RECEIPT NO': prescriptionData['RECEIPT NO'] || '',
+      'PAID FOR': prescriptionData['PAID FOR'] || '',
+      MODE: prescriptionData['MODE'] || 'Cash',
+      'TOTAL AMOUNT': prescriptionData['TOTAL AMOUNT'] || '',
+      'ADVANCE PAID': prescriptionData['ADVANCE PAID'] || '0',
+      'AMOUNT RECEIVED': prescriptionData['AMOUNT RECEIVED'] || '',
+      'DISCOUNT PERCENTAG': prescriptionData['DISCOUNT PERCENTAG'] || '0',
+      'DISCOUNT AMOUNT': prescriptionData['DISCOUNT AMOUNT'] || '0',
+      'AMOUNT DUE': prescriptionData['AMOUNT DUE'] || ''
+    })
+  }
+
+  // Handle refreshing the prescription data
+  const handleRefresh = async (): Promise<void> => {
+    try {
+      setRefreshing(true)
+
+      // If onRefresh prop is provided and we have a prescription
+      if (onRefresh && prescription) {
+        const freshPrescription = await onRefresh()
+        if (freshPrescription) {
+          // Re-initialize receipt data with the fresh prescription data
+          initializeReceiptData(freshPrescription)
+        }
+      } else {
+        // Fallback to refreshing from API directly
+        if (prescription?.id) {
+          // Get the latest prescription data from the API
+          const response = await window.api.getPrescriptions()
+          const freshPrescription = Array.isArray(response)
+            ? response.find((p) => p.id === prescription.id)
+            : null
+
+          if (freshPrescription) {
+            // Re-initialize receipt data with the fresh prescription data
+            initializeReceiptData(freshPrescription)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing prescription data:', error)
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   useEffect(() => {
     if (prescription) {
       // Initialize receipt data with prescription data
-      setReceiptData({
-        // Keep all original prescription data
-        ...prescription,
-        // Ensure these specific receipt fields are included
-        'RECEIPT NO': prescription['RECEIPT NO'] || '',
-        'PAID FOR': prescription['PAID FOR'] || '',
-        MODE: prescription['MODE'] || 'Cash',
-        'TOTAL AMOUNT': prescription['TOTAL AMOUNT'] || '',
-        'ADVANCE PAID': prescription['ADVANCE PAID'] || '0',
-        'AMOUNT RECEIVED': prescription['AMOUNT RECEIVED'] || '',
-        'DISCOUNT PERCENTAG': prescription['DISCOUNT PERCENTAG'] || '0',
-        'DISCOUNT AMOUNT': prescription['DISCOUNT AMOUNT'] || '0',
-        'AMOUNT DUE': prescription['AMOUNT DUE'] || ''
-      })
+      initializeReceiptData(prescription)
     }
   }, [prescription])
 
@@ -125,18 +168,71 @@ const PrescriptionEditModal: React.FC<PrescriptionEditModalProps> = ({
 
                   {/* Save button aligned to the right */}
                   {activeTab === 'prescription' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Trigger form submission via ref or other method
-                        document
-                          .querySelector('form')
-                          ?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }))
-                      }}
-                      className="ml-3 inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
-                    >
-                      Save
-                    </button>
+                    <div className="flex justify-end">
+                      <button
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                        className="ml-3 inline-flex justify-center cursor-pointer rounded-md shadow-sm px-4 py-2 text-base font-medium text-black border border-gray-300 sm:text-sm"
+                      >
+                        {refreshing ? (
+                          <>
+                            <svg
+                              className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-500"
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              ></circle>
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                              ></path>
+                            </svg>
+                            Refreshing...
+                          </>
+                        ) : (
+                          <>
+                            <svg
+                              className="-ml-1 mr-2 h-4 w-4 text-gray-500"
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                              />
+                            </svg>
+                            Refresh
+                          </>
+                        )}
+                      </button>{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Trigger form submission via ref or other method
+                          document
+                            .querySelector('form')
+                            ?.dispatchEvent(
+                              new Event('submit', { cancelable: true, bubbles: true })
+                            )
+                        }}
+                        className="ml-3 inline-flex justify-center cursor-pointer rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
+                      >
+                        Save
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -148,6 +244,7 @@ const PrescriptionEditModal: React.FC<PrescriptionEditModalProps> = ({
                       onCancel={onClose}
                       initialData={prescription}
                       selectedPatient={patient}
+                      key={JSON.stringify(prescription)} // Add key to force re-render when prescription changes
                     />
                   )}
 
@@ -160,6 +257,7 @@ const PrescriptionEditModal: React.FC<PrescriptionEditModalProps> = ({
                       patients={[patient]}
                       initialData={receiptData}
                       type="prescriptionedit"
+                      key={JSON.stringify(receiptData)} // Add key to force re-render when receiptData changes
                     />
                   )}
                 </div>

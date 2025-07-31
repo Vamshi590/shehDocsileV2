@@ -434,15 +434,15 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
         }))
         return
       } else {
-        // If manually entered (not in predefined list), reset financial fields
+        // If manually entered (not in predefined list), reset financial fields with zeros
         setFormData((prev) => ({
           ...prev,
           [name]: value,
-          'TOTAL AMOUNT': '',
+          'TOTAL AMOUNT': '0',
           'DISCOUNT PERCENTAG': 0,
           'DISCOUNT AMOUNT': 0,
           'ADVANCE PAID': 0,
-          'AMOUNT RECEIVED': '',
+          'AMOUNT RECEIVED': '0',
           'AMOUNT DUE': 0
         }))
         return
@@ -616,22 +616,22 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
       setFormData((prevData) => ({
         ...prevData,
         'PAID FOR': option,
-        'TOTAL AMOUNT': totalAmount,
+        'TOTAL AMOUNT': totalAmount || '0',
         'DISCOUNT PERCENTAG': discountPercentage,
         'DISCOUNT AMOUNT': discountAmount,
         'ADVANCE PAID': advancePaid,
-        'AMOUNT RECEIVED': amountReceived,
+        'AMOUNT RECEIVED': amountReceived || '0',
         'AMOUNT DUE': amountDue
       }))
     } else {
       setFormData((prevData) => ({
         ...prevData,
         'PAID FOR': option,
-        'TOTAL AMOUNT': '',
+        'TOTAL AMOUNT': '0',
         'DISCOUNT PERCENTAG': 0,
         'DISCOUNT AMOUNT': 0,
         'ADVANCE PAID': 0,
-        'AMOUNT RECEIVED': '',
+        'AMOUNT RECEIVED': '0',
         'AMOUNT DUE': 0
       }))
     }
@@ -720,7 +720,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
               id="TOTAL AMOUNT"
               min="0"
               step="0.01"
-              value={(formData['TOTAL AMOUNT'] as number) || ''}
+              value={formData['TOTAL AMOUNT']?.toString() || '0'}
               onChange={handleChange}
               required
               className="mt-1 block w-full border border-gray-300 text-black rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -739,7 +739,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
               min="0"
               max="100"
               step="0.01"
-              value={(formData['DISCOUNT PERCENTAG'] as number) || ''}
+              value={formData['DISCOUNT PERCENTAG']?.toString() || '0'}
               onChange={handleChange}
               className="mt-1 block w-full border border-gray-300 text-black rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
@@ -756,7 +756,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
               id="DISCOUNT AMOUNT"
               min="0"
               step="0.01"
-              value={(formData['DISCOUNT AMOUNT'] as number) || ''}
+              value={formData['DISCOUNT AMOUNT']?.toString() || '0'}
               onChange={handleChange}
               readOnly
               className="mt-1 block w-full border border-gray-300 text-black rounded-md shadow-sm py-2 px-3 bg-gray-100 text-gray-500"
@@ -774,7 +774,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
               id="ADVANCE PAID"
               min="0"
               step="0.01"
-              value={(formData['ADVANCE PAID'] as number) || ''}
+              value={formData['ADVANCE PAID']?.toString() || 0}
               onChange={handleChange}
               className="mt-1 block w-full border border-gray-300 text-black rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
@@ -791,7 +791,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
               id="AMOUNT RECEIVED"
               min="0"
               step="0.01"
-              value={(formData['AMOUNT RECEIVED'] as number) || ''}
+              value={formData['AMOUNT RECEIVED']?.toString() || '0'}
               onChange={handleChange}
               className="mt-1 block w-full border border-gray-300 text-black rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
@@ -808,7 +808,7 @@ const ReceiptForm: React.FC<ReceiptFormProps> = ({
               id="AMOUNT DUE"
               min="0"
               step="0.01"
-              value={(formData['AMOUNT DUE'] as number) || ''}
+              value={formData['AMOUNT DUE']?.toString() || '0'}
               onChange={handleChange}
               readOnly
               className="mt-1 block w-full border border-gray-300 text-black rounded-md shadow-sm py-2 px-3 bg-gray-100 text-gray-500"
