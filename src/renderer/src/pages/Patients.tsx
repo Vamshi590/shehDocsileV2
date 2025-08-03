@@ -7,6 +7,7 @@ import PatientForm from '../components/patients/PatientForm'
 import ReceiptForm, { Patient as ReceiptPatient } from '../components/prescriptions/ReceiptForm'
 import ReceiptViewer from '../components/reports/ReceiptViewer'
 import { toast, Toaster } from 'sonner'
+import InPatients from './InPatients'
 
 // Define types for API responses
 interface ApiResponse<T> {
@@ -71,11 +72,14 @@ const Patients: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showAddIPForm, setShowAddIPForm] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [showReceiptForm, setShowReceiptForm] = useState(false)
   const [showPrintOptions, setShowPrintOptions] = useState(false)
   const [lastCreatedReceipt, setLastCreatedReceipt] = useState<Prescription | null>(null)
+  // OP/IP Toggle state
+  const [viewMode, setViewMode] = useState<'OP' | 'IP'>('OP')
 
   // Ref for receipt element that will be used for printing
   const receiptRef = useRef<HTMLDivElement>(null)
@@ -185,11 +189,11 @@ const Patients: React.FC = () => {
       const receiptData = {
         ...formData,
         TYPE: 'RECEIPT',
-        DATE: formData.DATE || new Date().toISOString().split('T')[0],
+        DATE: formData?.date || new Date().toISOString().split('T')[0],
         'PATIENT ID': selectedPatient?.patientId || formData.patientId || '',
         'PATIENT NAME': selectedPatient?.name || formData['PATIENT NAME'] || '',
         GENDER: selectedPatient?.gender || formData.GENDER || '',
-        AGE: selectedPatient?.age || formData.AGE || '',
+        AGE: selectedPatient?.age || formData?.AGE || '',
         'CREATED BY':
           JSON.parse(localStorage.getItem('currentUser') || '{}')?.fullName || 'Unknown User'
       }
@@ -213,7 +217,7 @@ const Patients: React.FC = () => {
           GENDER: String(selectedPatient?.gender || formData.GENDER || ''),
           AGE: String(selectedPatient?.age || formData.AGE || ''),
           TYPE: 'RECEIPT',
-          DATE: String(formData.DATE || new Date().toISOString().split('T')[0]),
+          DATE: String(formData.date || new Date().toISOString().split('T')[0]),
           'CREATED BY': String(
             JSON.parse(localStorage.getItem('currentUser') || '{}')?.fullName || 'Unknown User'
           ),
@@ -381,25 +385,64 @@ const Patients: React.FC = () => {
             <h1 className="text-2xl font-medium text-gray-800">Patient Management</h1>
             <p className="text-sm text-gray-500">Sri Harsha Eye Hospital</p>
           </div>
-          <div className="flex items-center space-x-3">
+
+          {/* OP/IP Toggle Switch */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-1">
             <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
+              onClick={() => setViewMode('OP')}
+              className={`px-4 py-2 rounded-md transition-colors ${viewMode === 'OP' ? 'bg-white shadow-sm text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-200'}`}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <span>{showAddForm ? 'Hide Form' : 'Add Patient'}</span>
+              Out-Patient
             </button>
+            <button
+              onClick={() => setViewMode('IP')}
+              className={`px-4 py-2 rounded-md transition-colors ${viewMode === 'IP' ? 'bg-white shadow-sm text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-200'}`}
+            >
+              In-Patient
+            </button>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            {viewMode === 'OP' && (
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <span>{showAddForm ? 'Hide Form' : 'Add Patient'}</span>
+              </button>
+            )}
+            {viewMode === 'IP' && (
+              <button
+                onClick={() => setShowAddIPForm(!showAddIPForm)}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <span>{showAddIPForm ? 'Hide Form' : 'Add In-Patient'}</span>
+              </button>
+            )}
             <button
               onClick={() => (window.location.hash = '/dashboard')}
               className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
@@ -423,96 +466,104 @@ const Patients: React.FC = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8 sm:px-8 lg:px-10">
-        {/* Patient Add Form */}
-        {showAddForm && (
-          <div className="mb-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100 transition-all">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-medium text-gray-800 flex items-center">
+        {viewMode === 'IP' && (
+          <InPatients showAddForm={showAddIPForm} setShowAddForm={setShowAddIPForm} />
+        )}
+
+        {viewMode === 'OP' && (
+          <>
+            {/* Patient Add Form */}
+            {showAddForm && (
+              <div className="mb-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100 transition-all">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-medium text-gray-800 flex items-center">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-6 w-6 mr-2 text-blue-500"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                    </svg>
+                    Add New Patient
+                  </h2>
+                  <button
+                    onClick={() => setShowAddForm(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                <PatientForm
+                  onSubmit={handleAddPatient}
+                  patientCount={patients.length}
+                  onCreateReceipt={handleCreateReceipt}
+                />
+              </div>
+            )}
+            {loading && <p className="text-center">Loading...</p>}
+            {!loading && patients.length === 0 ? (
+              <div className="text-center py-12 border border-dashed border-gray-200 rounded-lg bg-white">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 mr-2 text-blue-500"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-                </svg>
-                Add New Patient
-              </h2>
-              <button
-                onClick={() => setShowAddForm(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
+                  className="h-16 w-16 mx-auto text-gray-300 mb-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
                 >
                   <path
-                    fillRule="evenodd"
-                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                    clipRule="evenodd"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1}
+                    d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
                   />
                 </svg>
-              </button>
-            </div>
-            <PatientForm
-              onSubmit={handleAddPatient}
-              patientCount={patients.length}
-              onCreateReceipt={handleCreateReceipt}
-            />
-          </div>
-        )}
-        {loading && <p className="text-center">Loading...</p>}
-        {!loading && patients.length === 0 ? (
-          <div className="text-center py-12 border border-dashed border-gray-200 rounded-lg bg-white">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-16 w-16 mx-auto text-gray-300 mb-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
-              />
-            </svg>
-            <p className="text-gray-600 text-lg mb-2">No patients found</p>
-            <p className="text-gray-500 mb-6">
-              Click the &quot;Add Patient&quot; button to create your first patient record today
-            </p>
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors shadow-sm inline-flex items-center"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 mr-1.5"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Add Patient
-            </button>
-          </div>
-        ) : (
-          !loading && (
-            <div className="mt-4">
-              <PatientTable
-                patients={patients}
-                onEdit={openEditModal}
-                onDelete={handleDeletePatient}
-              />
-            </div>
-          )
+                <p className="text-gray-600 text-lg mb-2">No patients found</p>
+                <p className="text-gray-500 mb-6">
+                  Click the &quot;Add Patient&quot; button to create your first patient record today
+                </p>
+                <button
+                  onClick={() => setShowAddForm(true)}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors shadow-sm inline-flex items-center"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 mr-1.5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Add Patient
+                </button>
+              </div>
+            ) : (
+              !loading && (
+                <div className="mt-4">
+                  <PatientTable
+                    patients={patients}
+                    onEdit={openEditModal}
+                    onDelete={handleDeletePatient}
+                  />
+                </div>
+              )
+            )}
+          </>
         )}
       </main>
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Patients from './pages/Patients'
+import InPatients from './pages/InPatients'
 import Prescriptions from './pages/Prescriptions'
 import Reports from './pages/Reports'
 import Operations from './pages/Operations'
@@ -44,6 +45,8 @@ function App(): React.JSX.Element {
         return <Dashboard />
       case '/patients':
         return <Patients />
+      case '/inpatients':
+        return <InPatients />
       case '/operations':
         return <Operations />
       case '/prescriptions':

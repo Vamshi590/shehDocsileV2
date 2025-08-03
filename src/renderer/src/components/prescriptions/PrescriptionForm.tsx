@@ -38,6 +38,7 @@ declare global {
       searchPrescriptions: (searchTerm: string) => Promise<Prescription[]>
       getTodaysPrescriptions: () => Promise<Prescription[]>
       getLatestPrescriptionId: () => Promise<number>
+      getPrescriptionsByPatientId: (patientId: string) => Promise<Prescription[]>
       getDropdownOptions: (fieldName: string) => Promise<string[]>
       addDropdownOption: (fieldName: string, value: string) => Promise<void>
       openPdfInWindow: (pdfBuffer: Uint8Array) => Promise<{ success: boolean; error?: string }>
@@ -48,6 +49,7 @@ declare global {
       deleteLab: (id: string) => Promise<boolean>
       searchLabs: (patientId: string) => Promise<Lab[]>
       getTodaysLabs: () => Promise<Lab[]>
+      getPrescriptionsByDate: (date: string) => Promise<Prescription[]>
     }
   }
 }
@@ -178,21 +180,10 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({
         window.api.getDropdownOptions('previousHistoryOptions'),
         window.api.getDropdownOptions('othersOptions')
       ])
-      console.log('Dropdown options:', presentComplainOpts, previousHistoryOpts, othersOpts)
-
       // Set dynamic options - API returns { success: boolean, options?: string[], error?: string }
       const presentOptions = (presentComplainOpts as { options?: string[] })?.options || []
       const previousOptions = (previousHistoryOpts as { options?: string[] })?.options || []
       const othersOptions = (othersOpts as { options?: string[] })?.options || []
-
-      console.log(
-        'Present options:',
-        presentOptions,
-        'Previous options:',
-        previousOptions,
-        'Others options:',
-        othersOptions
-      )
 
       setDynamicPresentComplainOptions([...new Set(presentOptions as string[])])
       setDynamicPreviousHistoryOptions([...new Set(previousOptions as string[])])
@@ -205,7 +196,6 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({
   // Helper function to add new option permanently
   const addNewOptionPermanently = async (fieldName: string, value: string): Promise<void> => {
     try {
-      console.log('Adding new option permanently:', fieldName, value)
       const response = await window.api.addDropdownOption(fieldName, value)
       console.log('Response:', response)
       // Refresh options from backend

@@ -1098,6 +1098,151 @@ ipcMain.handle('addPatient', async (_, patient) => {
 })
 
 // Get all operations
+
+// In-Patient Management
+ipcMain.handle('getInPatients', async () => {
+  try {
+    const { data, error } = await supabase
+      .from('inpatients')
+      .select('*')
+      .order('date', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching in-patients:', error)
+      return { success: false, message: 'Failed to fetch in-patients', error }
+    }
+
+    return { success: true, data }
+  } catch (error) {
+    console.error('Error in getInPatients:', error)
+    return { success: false, message: 'An error occurred while fetching in-patients', error }
+  }
+})
+
+ipcMain.handle('getLatestinPatientId', async () => {
+  try {
+    const { data, error } = await supabase
+      .from('inpatients')
+      .select('patientId')
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    if (error) {
+      throw new Error(`Supabase error: ${error.message}`)
+    }
+
+    const latestId = data && data.length > 0 ? data[0].patientId : null
+    return { success: true, data: { latestId } }
+  } catch (error) {
+    console.error('Error fetching latest patient ID:', error)
+    return {
+      success: false,
+      message: `Failed to fetch latest patient ID: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }
+  }
+})
+
+ipcMain.handle('addInPatient', async (_, inpatientData) => {
+  try {
+    const { data, error } = await supabase
+      .from('inpatients')
+      .insert([
+        {
+          ...inpatientData,
+          created_at: new Date().toISOString()
+        }
+      ])
+      .select()
+
+    if (error) {
+      throw new Error(`Supabase error: ${error.message}`)
+    }
+
+    return { success: true, data: data?.[0] || null }
+  } catch (error) {
+    console.error('Error adding in-patient:', error)
+    return {
+      success: false,
+      message: `Failed to add in-patient record: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }
+  }
+})
+
+ipcMain.handle('updateInPatient', async (_, id, inpatientData) => {
+  try {
+    console.log('updateInPatient id:', id)
+    console.log('updateInPatient inpatientData:', inpatientData)
+
+    // Validate parameters
+    if (!id) {
+      throw new Error('Missing required parameter: id')
+    }
+
+    // Log the validated parameters
+    console.log('Processing update for inpatient ID:', id)
+
+    const { data, error } = await supabase
+      .from('inpatients')
+      .update({
+        operationDetails: id.inpatientData.operationDetails,
+        operationProcedure: id.inpatientData.operationProcedure,
+        provisionDiagnosis: id.inpatientData.provisionDiagnosis,
+        prescriptions: id.inpatientData.prescriptions,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id.id)
+      .select()
+
+    if (error) {
+      throw new Error(`Supabase error: ${error.message}`)
+    }
+
+    return { success: true, data: data?.[0] || null }
+  } catch (error) {
+    console.error('Error updating in-patient:', error)
+    return {
+      success: false,
+      message: `Failed to update in-patient record: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }
+  }
+})
+
+ipcMain.handle('deleteInPatient', async (_, id) => {
+  try {
+    const { error } = await supabase.from('inpatients').delete().eq('id', id)
+
+    if (error) {
+      throw new Error(`Supabase error: ${error.message}`)
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('Error deleting in-patient:', error)
+    return {
+      success: false,
+      message: `Failed to delete in-patient record: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }
+  }
+})
+
+ipcMain.handle('getInPatientById', async (_, id) => {
+  try {
+    const { data, error } = await supabase.from('inpatients').select('*').eq('id', id).single()
+
+    if (error) {
+      throw new Error(`Supabase error: ${error.message}`)
+    }
+
+    return { success: true, data }
+  } catch (error) {
+    console.error('Error fetching in-patient by ID:', error)
+    return {
+      success: false,
+      message: `Failed to fetch in-patient record: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }
+  }
+})
+
 ipcMain.handle('getOperations', async () => {
   try {
     // Fetch all operations from Supabase
@@ -1340,6 +1485,32 @@ ipcMain.handle('getTodaysPrescriptions', async () => {
     return prescriptions || []
   } catch (error) {
     console.error('Error getting latest prescription ID from Supabase:', error)
+    return []
+  }
+})
+
+// Get prescriptions by specific date
+ipcMain.handle('getPrescriptionsByDate', async (_, date: string) => {
+  try {
+    // Validate date format (YYYY-MM-DD)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new Error('Invalid date format. Expected YYYY-MM-DD')
+    }
+
+    const { data: prescriptions, error } = await supabase
+      .from('prescriptions')
+      .select('*')
+      .eq('DATE', date)
+      .order('CREATED AT', { ascending: false })
+
+    if (error) {
+      throw new Error(`Supabase error: ${error.message}`)
+    }
+
+    console.log(`Prescriptions for date ${date} fetched from Supabase successfully`)
+    return prescriptions || []
+  } catch (error) {
+    console.error(`Error getting prescriptions for date ${date}:`, error)
     return []
   }
 })

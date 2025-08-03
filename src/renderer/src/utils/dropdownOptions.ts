@@ -321,6 +321,7 @@ export const provisionDiagnosisOptions = [
 ]
 
 export const sphOptions = [
+  '0.00',
   '-0.25',
   '-0.50',
   '-0.75',
@@ -405,6 +406,7 @@ export const sphOptions = [
 ]
 
 export const cylOptions = [
+  '0.00',
   '-0.25',
   '-0.50',
   '-0.75',
@@ -509,6 +511,7 @@ export const vaOptions = [
   '3/60',
   '2/60',
   '1/60',
+  'N6',
   'CFCF',
   'HM',
   'PL',

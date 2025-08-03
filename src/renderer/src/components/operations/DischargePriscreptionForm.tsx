@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { medicineOptions, timingOptions } from '../../utils/dropdownOptions'
 import EditableCombobox from '../common/EditableCombobox'
+import { InPatient } from '../../pages/InPatients'
 
 // Define the Prescription type to match with other components
 type Prescription = {
@@ -37,6 +38,7 @@ declare global {
       searchPrescriptions: (searchTerm: string) => Promise<Prescription[]>
       getTodaysPrescriptions: () => Promise<Prescription[]>
       getLatestPrescriptionId: () => Promise<number>
+      getPrescriptionsByPatientId: (patientId: string) => Promise<Prescription[]>
       getDropdownOptions: (fieldName: string) => Promise<string[]>
       addDropdownOption: (fieldName: string, value: string) => Promise<void>
       openPdfInWindow: (pdfBuffer: Uint8Array) => Promise<{ success: boolean; error?: string }>
@@ -47,22 +49,21 @@ declare global {
       deleteLab: (id: string) => Promise<boolean>
       searchLabs: (patientId: string) => Promise<Lab[]>
       getTodaysLabs: () => Promise<Lab[]>
+      getPrescriptionsByDate: (date: string) => Promise<Prescription[]>
     }
   }
 }
 
 interface DischargePriscreptionFormProps {
-  onSubmit: (prescription: Omit<Prescription, 'id'>) => Promise<void>
-  onCancel: () => void
-  prescriptionCount: number
-  initialData?: Partial<Prescription>
-  selectedPatient?: Patient | null
+  onSubmit: (data: Record<string, unknown>) => Promise<void>
+  prescriptionCount: number // Make this required
+  initialData?: Record<string, unknown>
+  selectedPatient?: InPatient | null
   patients?: Patient[]
 }
 
 const DischargePriscreptionForm: React.FC<DischargePriscreptionFormProps> = ({
   onSubmit,
-  onCancel,
   prescriptionCount,
   initialData = {},
   selectedPatient = null,
@@ -83,6 +84,35 @@ const DischargePriscreptionForm: React.FC<DischargePriscreptionFormProps> = ({
     }
     return Math.max(prescriptionCount, 1) // At least 1 prescription field
   })
+
+  // Function to handle removing a prescription
+  const handleRemovePrescription = (indexToRemove: number): void => {
+    // Create a new form data object without the removed prescription
+    const newFormData = { ...formData }
+
+    // Remove the prescription fields for the removed index
+    delete newFormData[`PRESCRIPTION ${indexToRemove + 1}`]
+    delete newFormData[`DAYS ${indexToRemove + 1}`]
+    delete newFormData[`TIMING ${indexToRemove + 1}`]
+
+    // Shift all prescriptions after the removed one up by one
+    for (let i = indexToRemove + 1; i < visiblePrescriptions; i++) {
+      newFormData[`PRESCRIPTION ${i}`] = newFormData[`PRESCRIPTION ${i + 1}`]
+      newFormData[`DAYS ${i}`] = newFormData[`DAYS ${i + 1}`]
+      newFormData[`TIMING ${i}`] = newFormData[`TIMING ${i + 1}`]
+
+      // Delete the original entries that were moved
+      delete newFormData[`PRESCRIPTION ${i + 1}`]
+      delete newFormData[`DAYS ${i + 1}`]
+      delete newFormData[`TIMING ${i + 1}`]
+    }
+
+    // Update form data
+    setFormData(newFormData)
+
+    // Decrease visible prescriptions count
+    setVisiblePrescriptions((prev) => Math.max(prev - 1, 1))
+  }
 
   const [formData, setFormData] = useState<Omit<Prescription, 'id'>>(() => {
     // Initialize with default values
@@ -139,9 +169,9 @@ const DischargePriscreptionForm: React.FC<DischargePriscreptionFormProps> = ({
             'PATIENT ID': selectedPatient['PATIENT ID'],
             'PATIENT NAME': selectedPatient['GUARDIAN NAME'], // Using guardian name as patient name
             'PHONE NUMBER': selectedPatient['PHONE NUMBER'],
-            AGE: selectedPatient.AGE,
-            GENDER: selectedPatient.GENDER,
-            ADDRESS: selectedPatient.ADDRESS
+            AGE: selectedPatient['AGE'],
+            GENDER: selectedPatient['GENDER'],
+            ADDRESS: selectedPatient['ADDRESS']
           }
         : {})
     }
@@ -256,21 +286,45 @@ const DischargePriscreptionForm: React.FC<DischargePriscreptionFormProps> = ({
     }
   }
 
+  // Add date to form data when submitting
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <p className="text-sm text-gray-500 mb-4">Fields marked with * are required</p>
+    <form id="discharge-prescription-form" onSubmit={handleSubmit} className="space-y-6">
 
       {/* Prescription Section */}
-      <div className="bg-gray-50 p-4 rounded-md">
+      <div className="border border-gray-200 p-4 rounded-md">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Prescription Details</h3>
 
         {/* Dynamic Prescription Fields */}
         {Array.from({ length: visiblePrescriptions }).map((_, index) => (
           <div
             key={`prescription-${index + 1}`}
-            className="mb-4 p-3 border border-gray-200 rounded-md"
+            className="mb-4 p-3 border border-gray-200 bg-blue-50 rounded-md"
           >
-            <h4 className="font-medium mb-2">Prescription {index + 1}</h4>
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="font-medium">Prescription {index + 1}</h4>
+              {visiblePrescriptions > 1 && (
+                <button
+                  type="button"
+                  onClick={() => handleRemovePrescription(index)}
+                  className="text-gray-500 hover:text-red-500 focus:outline-none"
+                  title="Remove prescription"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              )}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Prescription */}
               <div>
@@ -287,6 +341,7 @@ const DischargePriscreptionForm: React.FC<DischargePriscreptionFormProps> = ({
                   options={medicineOptions}
                   onChange={handleChange}
                   placeholder="Select or type medicine name, dosage..."
+                  className="bg-white"
                 />
               </div>
 
@@ -304,7 +359,7 @@ const DischargePriscreptionForm: React.FC<DischargePriscreptionFormProps> = ({
                   id={`DAYS ${index + 1}`}
                   value={(formData[`DAYS ${index + 1}`] as string) || ''}
                   onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-full border border-gray-300 bg-white rounded-md py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Number of days"
                 />
               </div>
@@ -323,25 +378,8 @@ const DischargePriscreptionForm: React.FC<DischargePriscreptionFormProps> = ({
                   value={(formData[`TIMING ${index + 1}`] as string) || ''}
                   onChange={handleChange}
                   placeholder="Select or type timing..."
+                  className="bg-white"
                 />
-                {/* <div className="relative">
-                  <input
-                    type="text"
-                    name={`TIMING ${index + 1}`}
-                    id={`TIMING ${index + 1}`}
-                    value={(formData[`TIMING ${index + 1}`] as string) || ''}
-                    onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="e.g., Morning, Afternoon, Night"
-                    list={`timing-options-${index}`}
-                    autoComplete="off"
-                  />
-                  <datalist id={`timing-options-${index}`}>
-                    {timingOptions.map((option, i) => (
-                      <option key={i} value={option} />
-                    ))}
-                  </datalist>
-                </div> */}
               </div>
             </div>
           </div>
@@ -352,7 +390,7 @@ const DischargePriscreptionForm: React.FC<DischargePriscreptionFormProps> = ({
           <button
             type="button"
             onClick={() => setVisiblePrescriptions((prev) => Math.min(prev + 1, 10))}
-            className="mt-2 flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="mt-2 flex items-center px-4 py-2 text-sm font-medium rounded-md shadow-sm text-black"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -371,23 +409,7 @@ const DischargePriscreptionForm: React.FC<DischargePriscreptionFormProps> = ({
         )}
       </div>
 
-      <div className="pt-5 border-t border-gray-200">
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 mr-3"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 bg-blue-500 text-white rounded-md shadow-sm hover:bg-blue-600"
-          >
-            Save
-          </button>
-        </div>
-      </div>
+      {/* Buttons removed - now using parent component buttons */}
     </form>
   )
 }

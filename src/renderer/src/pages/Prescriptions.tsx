@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import PrescriptionForm from '../components/prescriptions/PrescriptionForm'
 import PrescriptionTableWithReceipts from '../components/prescriptions/PrescriptionTableWithReceipts'
 import PrescriptionEditModal from '../components/prescriptions/PrescriptionEditModal'
 import EyeReadingEditModal from '../components/prescriptions/EyeReadingEditModal'
 import ReceiptForm, { Patient as ReceiptFormPatient } from '../components/prescriptions/ReceiptForm'
 import ReadingForm from '../components/prescriptions/ReadingForm'
+import OperationDetailsModal from '../components/operations/OperationDetailsModal'
 import { toast, Toaster } from 'sonner'
+import { InPatient } from '../pages/InPatients'
+
 // Define the Prescription type
-type Prescription = {
+export type Prescription = {
   id: string
   [key: string]: unknown
 }
@@ -47,6 +50,7 @@ declare global {
       searchPrescriptions: (searchTerm: string) => Promise<Prescription[]>
       getTodaysPrescriptions: () => Promise<Prescription[]>
       getLatestPrescriptionId: () => Promise<number>
+      getPrescriptionsByPatientId: (patientId: string) => Promise<Prescription[]>
       getDropdownOptions: (fieldName: string) => Promise<string[]>
       addDropdownOption: (fieldName: string, value: string) => Promise<void>
       openPdfInWindow: (pdfBuffer: Uint8Array) => Promise<{ success: boolean; error?: string }>
@@ -57,6 +61,7 @@ declare global {
       deleteLab: (id: string) => Promise<boolean>
       searchLabs: (patientId: string) => Promise<Lab[]>
       getTodaysLabs: () => Promise<Lab[]>
+      getPrescriptionsByDate: (date: string) => Promise<Prescription[]>
     }
   }
 }
@@ -80,6 +85,25 @@ const Prescriptions: React.FC = () => {
   // Track if prescription and eye reading have been added to the current receipt
   const [hasPrescription, setHasPrescription] = useState<boolean>(false)
   const [hasEyeReading, setHasEyeReading] = useState<boolean>(false)
+  // Track the selected date for filtering prescriptions
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0])
+  // Track patient receipts
+  const [patientReceipts, setPatientReceipts] = useState<Prescription[]>([])
+  // OP/IP Toggle state
+  const [viewMode, setViewMode] = useState<'OP' | 'IP'>('OP')
+  // State for in-patient management and operation details modal
+  const [inPatients, setInPatients] = useState<InPatient[]>([])
+  const [loadingInPatients, setLoadingInPatients] = useState(false)
+  const [selectedInPatient, setSelectedInPatient] = useState<InPatient | null>(null)
+  const [showOperationDetailsModal, setShowOperationDetailsModal] = useState(false)
+  // State for operation details form
+  const [operationDetails, setOperationDetails] = useState({
+    operationName: '',
+    operationDate: '',
+    operationDetails: '',
+    operationProcedure: '',
+    provisionDiagnosis: ''
+  })
 
   // Reset prescription and eye reading flags when current receipt changes
   useEffect(() => {
@@ -90,25 +114,35 @@ const Prescriptions: React.FC = () => {
   }, [currentReceipt])
   // Toast notifications state
 
-  // Load prescriptions and patients on component mount
-  useEffect(() => {
-    loadPrescriptions()
-    loadPatients()
+  // Function to load in-patients from the backend
+  const loadInPatients = useCallback(async (): Promise<void> => {
+    try {
+      setLoadingInPatients(true)
+      const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
+      const response = (await api.getInPatients()) as ApiResponse<InPatient[]>
+
+      if (response.success && response.data) {
+        setInPatients(response.data)
+      } else {
+        toast.error('Failed to load in-patients')
+      }
+    } catch (error) {
+      console.error('Error loading in-patients:', error)
+      toast.error('Failed to load in-patients')
+    } finally {
+      setLoadingInPatients(false)
+    }
   }, [])
 
-  const getCurrentUser = (): string => {
-    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
-    return currentUser.fullName || currentUser.username || 'Unknown User'
-  }
-  // Define the standardized response type
-  interface StandardizedResponse<T> {
-    success: boolean
-    data: T | null
-    message?: string
-  }
+  // Load in-patients when view mode changes to IP
+  useEffect(() => {
+    if (viewMode === 'IP') {
+      loadInPatients()
+    }
+  }, [viewMode, loadInPatients])
 
   // Function to load patients from the backend
-  const loadPatients = async (): Promise<void> => {
+  const loadPatients = useCallback(async (): Promise<void> => {
     try {
       setLoading(true)
       const response = await window.api.getPatients()
@@ -136,21 +170,51 @@ const Prescriptions: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [setLoading, setPatients, setError])
 
   // Function to load prescriptions from the backend
-  const loadPrescriptions = async (): Promise<void> => {
-    try {
-      setLoading(true)
-      const data = await window.api.getTodaysPrescriptions()
-      setPrescriptions(data)
-      setError('')
-    } catch (err) {
-      console.error('Error loading prescriptions:', err)
-      setError('Failed to load prescriptions')
-    } finally {
-      setLoading(false)
-    }
+  const loadPrescriptions = useCallback(
+    async (date?: string): Promise<void> => {
+      try {
+        setLoading(true)
+        const dateToLoad = date || selectedDate
+        let data
+
+        if (dateToLoad === new Date().toISOString().split('T')[0]) {
+          // If today's date, use the getTodaysPrescriptions method
+          data = await window.api.getTodaysPrescriptions()
+        } else {
+          // Otherwise use the new getPrescriptionsByDate method
+          data = await window.api.getPrescriptionsByDate(dateToLoad)
+        }
+
+        setPrescriptions(data)
+        setError('')
+      } catch (err) {
+        console.error('Error loading prescriptions:', err)
+        setError('Failed to load prescriptions')
+      } finally {
+        setLoading(false)
+      }
+    },
+    [selectedDate, setLoading, setPrescriptions, setError]
+  )
+
+  // Load prescriptions and patients on component mount
+  useEffect(() => {
+    loadPatients()
+    loadPrescriptions()
+  }, [loadPatients, loadPrescriptions])
+
+  const getCurrentUser = (): string => {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
+    return currentUser.fullName || currentUser.username || 'Unknown User'
+  }
+  // Define the standardized response type
+  interface StandardizedResponse<T> {
+    success: boolean
+    data: T | null
+    message?: string
   }
 
   // Function to handle adding a new prescription
@@ -649,9 +713,6 @@ const Prescriptions: React.FC = () => {
         'UPDATED AT': new Date().toISOString()
       }
 
-      // Log what fields are being updated
-      console.log('Updating only these fields:', updatedPrescriptionData)
-
       // Update the prescription in the database with only the changed fields
       // Ensure id is included to satisfy TypeScript's Prescription type requirements
       const updatedPrescription = (await window.api.updatePrescription(
@@ -701,9 +762,6 @@ const Prescriptions: React.FC = () => {
         'UPDATED AT': new Date().toISOString()
       }
 
-      // Log what fields are being updated
-      console.log('Updating only these eye reading fields:', updatedEyeReadingData)
-
       // Update the eye reading in the database with only the changed fields
       // Use double casting to avoid TypeScript errors
       const updatedEyeReading = (await window.api.updatePrescription(
@@ -734,10 +792,129 @@ const Prescriptions: React.FC = () => {
   }
 
   // Function to find receipts for a patient
-  const findReceiptsForPatient = (patientId: string): Prescription[] => {
+  const findReceiptsForPatient = async (patientId: string): Promise<Prescription[]> => {
     console.log('Finding receipts for patient:', patientId)
     console.log('Available receipts:', prescriptions)
-    return prescriptions.filter((p) => p['PATIENT ID'] === patientId && p.TYPE === 'RECEIPT')
+    const response = (await window.api.getPrescriptionsByPatientId(
+      patientId
+    )) as unknown as ApiResponse<Prescription[]>
+    return response.data
+  }
+
+  // We're using getInPatientStatus for IP patients, and the status is displayed in the UI directly
+
+  // Function to determine in-patient status based on their data
+  const getInPatientStatus = (patient: InPatient): string => {
+    // Check if operation details, procedure, and diagnosis are all filled in
+    if (patient.operationDetails && patient.operationProcedure && patient.provisionDiagnosis) {
+      return 'Completed'
+    } else if (patient.operationName) {
+      return 'In Operation'
+    } else if (patient.doctorNames && patient.doctorNames.length > 0) {
+      return 'With Doctor'
+    } else {
+      return 'At Optometrist'
+    }
+  }
+
+  // Function to handle opening the operation details modal
+  const handleOpenOperationDetailsModal = (patient: InPatient): void => {
+    setSelectedInPatient(patient)
+    // Reset operation details form
+    setOperationDetails({
+      operationName: patient.operationName || '',
+      operationDate: patient.operationDate || '',
+      operationDetails: patient.operationDetails || '',
+      operationProcedure: patient.operationProcedure || '',
+      provisionDiagnosis: patient.provisionDiagnosis || ''
+    })
+    setShowOperationDetailsModal(true)
+  }
+
+  // Function to handle operation details form input changes
+  const handleOperationDetailsChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ): void => {
+    const { id, value } = e.target
+    setOperationDetails((prev) => ({
+      ...prev,
+      [id]: value
+    }))
+  }
+
+  // Function to save operation details
+  const handleSaveOperationDetails = async (): Promise<void> => {
+    if (!selectedInPatient) return
+
+    try {
+      // Format the operation details
+      console.log('operationDetails', operationDetails)
+      console.log('selectedInPatient', selectedInPatient)
+
+      // Only update specific fields as requested
+      // Use the existing prescriptions from the inpatient record
+      // We need to ensure we're not losing prescriptions added via the modal
+      const prescriptions = selectedInPatient?.prescriptions || []
+
+      // Create the update payload with all required fields
+      const inpatientData = {
+        operationDetails: operationDetails.operationDetails,
+        operationProcedure: operationDetails.operationProcedure,
+        provisionDiagnosis: operationDetails.provisionDiagnosis,
+        // Make sure we're sending the prescriptions array to the backend
+        prescriptions: prescriptions
+      }
+
+      console.log('inpatientData', inpatientData)
+
+      // Call the API to update the in-patient record
+      const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
+      // Ensure we're passing the parameters correctly
+      const response = await api.updateInPatient(selectedInPatient.id, inpatientData)
+
+      if (response && (response as StandardizedResponse<InPatient>).success) {
+        toast.success('Operation details saved successfully')
+
+        // Update the in-patients list with the updated patient
+        const updatedPatient = {
+          ...selectedInPatient,
+          ...inpatientData
+        }
+
+        setInPatients((prev) =>
+          prev.map((p) => (p.id === selectedInPatient.id ? updatedPatient : p))
+        )
+
+        // Close the modal
+        setShowOperationDetailsModal(false)
+      } else {
+        toast.error('Failed to save operation details')
+      }
+    } catch (error) {
+      console.error('Error saving operation details:', error)
+      toast.error('Error saving operation details')
+    }
+  }
+
+  // Function to handle in-patient card click
+  const handleInPatientCardClick = (patient: InPatient): void => {
+    // Convert InPatient to Prescription format for the PrescriptionEditModal
+    const prescriptionData: Prescription = {
+      id: patient.id,
+      'PATIENT ID': patient.patientId,
+      'GUARDIAN NAME': patient.guardianName || patient.name,
+      'PHONE NUMBER': patient.phone,
+      AGE: patient.age,
+      GENDER: patient.gender,
+      ADDRESS: patient.address,
+      DOB: patient.dateOfBirth,
+      'OPERATION DETAILS': patient.operationName || '',
+      DEPARTMENT: patient.department || '',
+      'DOCTOR NAMES': patient.doctorNames?.join(', ') || ''
+    }
+
+    setEditingPrescription(prescriptionData)
+    setIsModalOpen(true)
   }
 
   // Function to handle patient search
@@ -747,6 +924,7 @@ const Prescriptions: React.FC = () => {
       setLoading(true)
       setFoundPatient(null)
       setCurrentReceipt(null)
+      setPatientReceipts([]) // Reset patient receipts
 
       // Close any open forms first
       setShowAddForm(false)
@@ -795,10 +973,14 @@ const Prescriptions: React.FC = () => {
         // This ensures we don't automatically go to the prescription stage
         setCurrentReceipt(null)
 
-        // Check if this patient has any existing receipts
+        // Load patient receipts asynchronously
         const patientId = String(matchedPatient['patientId'] || '')
-        const patientReceipts = findReceiptsForPatient(patientId)
-        console.log('Existing receipts for patient:', patientReceipts)
+        console.log('Loading receipts for patient:', patientId)
+
+        // Load receipts asynchronously
+        const receipts = await findReceiptsForPatient(patientId)
+        setPatientReceipts(receipts || [])
+        console.log('Existing receipts for patient:', receipts)
 
         // We'll show existing receipts in the UI, but won't automatically set one as current
         // This way, the user must explicitly create a new receipt or select an existing one
@@ -826,6 +1008,23 @@ const Prescriptions: React.FC = () => {
             <h1 className="text-2xl font-medium text-gray-800">Receipts & Prescriptions</h1>
             <p className="text-sm text-gray-500">Sri Harshini Eye Hospital</p>
           </div>
+
+          {/* OP/IP Toggle Switch */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('OP')}
+              className={`px-4 py-2 rounded-md transition-colors ${viewMode === 'OP' ? 'bg-white shadow-sm text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-200'}`}
+            >
+              Out-Patient
+            </button>
+            <button
+              onClick={() => setViewMode('IP')}
+              className={`px-4 py-2 rounded-md transition-colors ${viewMode === 'IP' ? 'bg-white shadow-sm text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-200'}`}
+            >
+              In-Patient
+            </button>
+          </div>
+
           <div className="flex items-center space-x-3">
             <button
               onClick={() => {
@@ -892,663 +1091,13 @@ const Prescriptions: React.FC = () => {
           </div>
         )}
 
-        {/* Current Receipt Information */}
-        {currentReceipt && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-100 text-blue-700 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 mr-3 text-blue-500"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                  <path
-                    fillRule="evenodd"
-                    d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <div>
-                  <h3 className="font-medium">Current Patient Visit</h3>
-                  <p className="text-sm">
-                    {`${currentReceipt['GUARDIAN NAME'] || 'Patient'} • ${currentReceipt['PHONE NUMBER'] || 'No phone'} • Receipt #${currentReceipt.id ? currentReceipt.id.substring(0, 8) : 'N/A'}`}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleCompleteVisit}
-                className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors flex items-center space-x-1"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <span>Complete Visit</span>
-              </button>
-            </div>
-          </div>
-        )}
+        {/* IP View - Card Grid */}
+        {viewMode === 'IP' && (
+          <div className="mt-2 bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+            <h2 className="text-lg font-medium text-gray-800 mb-4">In-Patient Records</h2>
 
-        {/* Search Bar */}
-        <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-          <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
-            Search Patients
-          </label>
-          <div className="flex items-center gap-2">
-            <div className="flex-grow">
-              <input
-                type="text"
-                id="search"
-                placeholder="Search by Patient ID, Name, or Phone Number"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    handleSearch(e)
-                  }
-                }}
-              />
-            </div>
-            <div className="flex">
-              <button
-                onClick={(e) => handleSearch(e)}
-                type="button"
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <span>Search</span>
-              </button>
-              <button
-                onClick={() => {
-                  setSearchTerm('')
-                  setFoundPatient(null)
-                  setError('')
-                }}
-                className="ml-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <span>Clear</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Patient Details Display */}
-        {foundPatient && (
-          <div className="mb-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100 transition-all">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-medium text-gray-800 flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 mr-2 text-blue-500"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
-                </svg>
-                Patient Details
-              </h2>
-              <button
-                onClick={() => setFoundPatient(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            {/* Patient Information Table */}
-            <div className="overflow-x-auto mb-6">
-              <table className="min-w-full divide-y divide-gray-200">
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {/* Display all patient fields dynamically */}
-                  {Object.entries(foundPatient).map(([key, value], index) => {
-                    // Skip the id field as it's internal
-                    if (key === 'id') return null
-
-                    // Create a new row for every two fields
-                    if (index % 2 === 0) {
-                      const nextKey = Object.keys(foundPatient)[index + 1]
-                      const nextValue = nextKey ? foundPatient[nextKey] : null
-
-                      // Format the field names for display
-                      const formatFieldName = (field: string): string => {
-                        return field
-                          .replace(/_/g, ' ')
-                          .split(' ')
-                          .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                          .join(' ')
-                      }
-
-                      return (
-                        <tr key={key}>
-                          <td className="px-4 py-3 text-sm font-medium text-gray-500 bg-gray-50">
-                            {formatFieldName(key)}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-900">
-                            {value !== null && value !== undefined ? String(value) : 'N/A'}
-                          </td>
-
-                          {nextKey && nextKey !== 'id' && (
-                            <>
-                              <td className="px-4 py-3 text-sm font-medium text-gray-500 bg-gray-50">
-                                {formatFieldName(nextKey)}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-900">
-                                {nextValue !== null && nextValue !== undefined
-                                  ? String(nextValue)
-                                  : 'N/A'}
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      )
-                    }
-                    return null
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-wrap gap-4 mt-6">
-              {/* Show existing receipts for the patient if any */}
-              {foundPatient && !currentReceipt && (
-                <div className="w-full mb-4">
-                  {/* Check for existing receipts */}
-                  {(() => {
-                    // Make sure we have a valid patient ID
-                    const patientId = typeof foundPatient.id === 'string' ? foundPatient.id : ''
-                    const patientReceipts = findReceiptsForPatient(patientId)
-
-                    if (patientReceipts.length > 0) {
-                      return (
-                        <div className="bg-white p-4 rounded-md shadow-sm mb-4">
-                          <h3 className="text-lg font-medium text-gray-800 mb-2">
-                            Existing Receipts
-                          </h3>
-                          <p className="text-sm text-gray-600 mb-3">
-                            This patient has {patientReceipts.length} existing receipt(s). You can
-                            continue with an existing receipt or create a new one.
-                          </p>
-
-                          <div className="space-y-2 mb-4">
-                            {patientReceipts.map((receipt) => (
-                              <div
-                                key={receipt.id}
-                                className="border border-gray-200 rounded-md p-3 hover:bg-gray-50"
-                              >
-                                <div className="flex justify-between items-center">
-                                  <div>
-                                    <p className="font-medium">
-                                      Receipt #
-                                      {typeof receipt.id === 'string'
-                                        ? receipt.id.substring(0, 8)
-                                        : 'N/A'}
-                                    </p>
-                                    <p className="text-sm text-gray-500">
-                                      Date:{' '}
-                                      {new Date(
-                                        receipt.createdAt && typeof receipt.createdAt === 'string'
-                                          ? receipt.createdAt
-                                          : receipt.createdAt &&
-                                              typeof receipt.createdAt === 'number'
-                                            ? receipt.createdAt
-                                            : Date.now()
-                                      ).toLocaleDateString()}
-                                    </p>
-                                  </div>
-                                  <button
-                                    onClick={() => {
-                                      // Set this receipt as the current receipt
-                                      setCurrentReceipt(receipt)
-                                      // Close any open forms
-                                      setShowAddForm(false)
-                                      setShowReceiptForm(false)
-                                      setShowReadingForm(false)
-                                    }}
-                                    className="px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md text-sm font-medium"
-                                  >
-                                    Continue with this receipt
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="border-t border-gray-200 pt-3 mt-2">
-                            <button
-                              onClick={() => {
-                                // Close other forms if open
-                                if (showAddForm) setShowAddForm(false)
-                                if (showReadingForm) setShowReadingForm(false)
-                                // Open receipt form
-                                setShowReceiptForm(true)
-                              }}
-                              className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-5 w-5"
-                                viewBox="0 0 20 20"
-                                fill="currentColor"
-                              >
-                                <path
-                                  fillRule="evenodd"
-                                  d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
-                                  clipRule="evenodd"
-                                />
-                              </svg>
-                              <span>Create New Receipt</span>
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    } else {
-                      // No existing receipts, show the create receipt button prominently
-                      return (
-                        <div className="bg-green-50 p-4 rounded-md shadow-sm mb-4 border border-green-200">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h3 className="text-lg font-medium text-gray-800 mb-2 flex items-center">
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-5 w-5 mr-2 text-green-500"
-                                  viewBox="0 0 20 20"
-                                  fill="currentColor"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                                Patient Found - Create Receipt First
-                              </h3>
-                              <p className="text-sm text-gray-600 mb-4">
-                                Please create a receipt for this patient before adding prescriptions
-                                or readings.
-                              </p>
-                            </div>
-
-                            <button
-                              onClick={() => {
-                                // Close other forms if open
-                                if (showAddForm) setShowAddForm(false)
-                                if (showReadingForm) setShowReadingForm(false)
-                                // Open receipt form
-                                setShowReceiptForm(true)
-                              }}
-                              className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-5 w-5"
-                                viewBox="0 0 20 20"
-                                fill="currentColor"
-                              >
-                                <path
-                                  fillRule="evenodd"
-                                  d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
-                                  clipRule="evenodd"
-                                />
-                              </svg>
-                              <span>Create Receipt</span>
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    }
-                  })()}
-                </div>
-              )}
-
-              {/* Show Prescription and Reading buttons only after a receipt has been created */}
-              {currentReceipt && (
-                <>
-                  <button
-                    onClick={() => {
-                      // Close other forms if open
-                      if (showReceiptForm) setShowReceiptForm(false)
-                      if (showReadingForm) setShowReadingForm(false)
-                      // Open prescription form
-                      setShowAddForm(true)
-                      if (hasPrescription) {
-                        // If editing, load the existing prescription data into the form
-                        // We can use the current receipt data since it contains the prescription
-                        setEditingPrescription(currentReceipt)
-                        setIsModalOpen(true)
-                        // Show toast message indicating edit mode
-                        toast.info('Editing existing prescription')
-                      } else {
-                        // If adding new, clear any editing state
-                        setEditingPrescription(null)
-                        setShowAddForm(true)
-                        setIsModalOpen(false)
-                      }
-                    }}
-                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      {hasPrescription ? (
-                        // Edit icon
-                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                      ) : (
-                        // Add prescription icon
-                        <>
-                          <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                          <path
-                            fillRule="evenodd"
-                            d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
-                            clipRule="evenodd"
-                          />
-                        </>
-                      )}
-                    </svg>
-                    <span>{hasPrescription ? 'Edit Prescription' : 'Add Prescription'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      // Close other forms if open
-                      if (showAddForm) setShowAddForm(false)
-                      if (showReceiptForm) setShowReceiptForm(false)
-
-                      if (hasEyeReading) {
-                        // If editing, open the eye reading edit modal with the current receipt data
-                        setEditingEyeReading(currentReceipt)
-                        setIsEyeReadingModalOpen(true)
-                        // Show toast message indicating edit mode
-                        toast.info('Editing existing eye reading')
-                      } else {
-                        // If adding new, open the reading form
-                        setShowReadingForm(true)
-                        setEditingPrescription(null)
-                      }
-                    }}
-                    className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      {hasEyeReading ? (
-                        // Edit icon
-                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                      ) : (
-                        // Eye reading chart icon
-                        <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-                      )}
-                    </svg>
-                    <span>{hasEyeReading ? 'Edit Eye Reading' : 'Add Eye Reading'}</span>
-                  </button>
-                </>
-              )}
-
-              {/* If there's a current receipt, show a button to finish and reset */}
-              {currentReceipt && (
-                <button
-                  onClick={handleCompleteVisit}
-                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  <span>Complete Patient Visit</span>
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Add Prescription Form */}
-        {showAddForm && (
-          <div className="mb-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100 transition-all">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-medium text-gray-800 flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 mr-2 text-blue-500"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                  <path
-                    fillRule="evenodd"
-                    d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                New Prescription
-              </h2>
-              <button
-                onClick={() => setShowAddForm(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </button>
-            </div>
-            <PrescriptionForm
-              onSubmit={handleAddPrescription}
-              onCancel={() => setShowAddForm(false)}
-              prescriptionCount={prescriptions.length}
-              patients={patients}
-              selectedPatient={foundPatient}
-            />
-          </div>
-        )}
-
-        {/* Receipt Form */}
-        {showReceiptForm && (
-          <div className="mb-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100 transition-all">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-medium text-gray-800 flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 mr-2 text-gray-500"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <span>Create Receipt</span>
-              </h2>
-              <button
-                onClick={() => setShowReceiptForm(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </button>
-            </div>
-            <ReceiptForm
-              onSubmit={handleAddReceipt}
-              onCancel={() => setShowReceiptForm(false)}
-              patients={patients.map(convertToReceiptFormPatient)}
-              selectedPatient={foundPatient ? convertToReceiptFormPatient(foundPatient) : null}
-            />
-          </div>
-        )}
-
-        {/* Add Reading Form */}
-        {showReadingForm && (
-          <div className="mb-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100 transition-all">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-medium text-gray-800 flex items-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 mr-2 text-purple-500"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-                </svg>
-                New Eye Reading
-              </h2>
-              <button
-                onClick={() => setShowReadingForm(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </button>
-            </div>
-            <ReadingForm
-              onSubmit={handleAddReading}
-              onCancel={() => setShowReadingForm(false)}
-              patients={patients.map(convertToReceiptFormPatient)}
-              selectedPatient={foundPatient ? convertToReceiptFormPatient(foundPatient) : null}
-            />
-          </div>
-        )}
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-medium text-gray-800 flex items-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6 mr-2 text-blue-500"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-                <path
-                  fillRule="evenodd"
-                  d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Prescription Records (Today)
-            </h2>
-            <div className="text-sm text-gray-500">
-              {!loading && prescriptions.length > 0 && (
-                <span>
-                  {
-                    prescriptions.filter((prescription) => {
-                      const today = new Date().toISOString().split('T')[0]
-                      const prescriptionDate = prescription.DATE
-                        ? typeof prescription.DATE === 'string'
-                          ? prescription.DATE.split('T')[0]
-                          : prescription.DATE
-                        : ''
-                      return prescriptionDate === today
-                    }).length
-                  }{' '}
-                  today&apos;s{' '}
-                  {prescriptions.filter((prescription) => {
-                    const today = new Date().toISOString().split('T')[0]
-                    const prescriptionDate = prescription.DATE
-                      ? typeof prescription.DATE === 'string'
-                        ? prescription.DATE.split('T')[0]
-                        : prescription.DATE
-                      : ''
-                    return prescriptionDate === today
-                  }).length === 1
-                    ? 'record'
-                    : 'records'}{' '}
-                  found
-                </span>
-              )}
-            </div>
-          </div>
-          {loading && (
-            <div className="flex items-center justify-center py-10">
-              <div className="flex flex-col items-center">
+            {loadingInPatients ? (
+              <div className="flex justify-center items-center py-12">
                 <svg
                   className="animate-spin h-8 w-8 text-blue-500"
                   xmlns="http://www.w3.org/2000/svg"
@@ -1561,7 +1110,7 @@ const Prescriptions: React.FC = () => {
                     cy="12"
                     r="10"
                     stroke="currentColor"
-                    strokeWidth="3"
+                    strokeWidth="4"
                   ></circle>
                   <path
                     className="opacity-75"
@@ -1569,67 +1118,868 @@ const Prescriptions: React.FC = () => {
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   ></path>
                 </svg>
-                <p className="mt-3 text-gray-500">Loading prescriptions...</p>
+              </div>
+            ) : inPatients.length === 0 ? (
+              <div className="bg-gray-50 rounded-lg p-6 text-center">
+                <p className="text-gray-600">No in-patient records found</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {inPatients.map((patient) => {
+                  const status = getInPatientStatus(patient)
+                  let statusColor = ''
+
+                  switch (status) {
+                    case 'At Optometrist':
+                      statusColor = 'bg-yellow-100 text-yellow-800'
+                      break
+                    case 'With Doctor':
+                      statusColor = 'bg-blue-100 text-blue-800'
+                      break
+                    case 'In Operation':
+                      statusColor = 'bg-purple-100 text-purple-800'
+                      break
+                    case 'Completed':
+                      statusColor = 'bg-green-100 text-green-800'
+                      break
+                    default:
+                      statusColor = 'bg-gray-100 text-gray-800'
+                  }
+
+                  return (
+                    <div
+                      key={patient.id}
+                      className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
+                    >
+                      <div className="p-4">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="font-medium text-gray-900">{patient.name}</h3>
+                            <p className="text-sm text-gray-600">{patient.patientId}</p>
+                          </div>
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor}`}
+                          >
+                            {status}
+                          </span>
+                        </div>
+
+                        <div className="text-sm text-gray-600 space-y-1 mb-4">
+                          <p>
+                            Age: {patient.age} | Gender: {patient.gender}
+                          </p>
+                          <p>Guardian: {patient.guardianName || 'N/A'}</p>
+                          <p>Phone: {patient.phone}</p>
+                          {patient.operationName && (
+                            <p className="font-medium text-gray-700">
+                              Operation: {patient.operationName}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleInPatientCardClick(patient)}
+                            className="flex-1 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded text-sm font-medium transition-colors"
+                          >
+                            View Details
+                          </button>
+                          <button
+                            onClick={() => handleOpenOperationDetailsModal(patient)}
+                            className="flex-1 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded text-sm font-medium transition-colors"
+                          >
+                            Add Operation
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Current Receipt Information */}
+        {viewMode === 'OP' && (
+          <div className="max-w-7xl mx-auto">
+            {/* Search Bar */}
+            <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+              <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
+                Search Patients
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="flex-grow">
+                  <input
+                    type="text"
+                    id="search"
+                    placeholder="Search by Patient ID, Name, or Phone Number"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleSearch(e)
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex">
+                  <button
+                    onClick={(e) => handleSearch(e)}
+                    type="button"
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span>Search</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSearchTerm('')
+                      setFoundPatient(null)
+                      setError('')
+                    }}
+                    className="ml-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span>Clear</span>
+                  </button>
+
+                  {/* Date Picker */}
+                  <div className="ml-2 relative">
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => {
+                        const newDate = e.target.value
+                        setSelectedDate(newDate)
+                        loadPrescriptions(newDate)
+                      }}
+                      className="px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          )}
-          {!loading && prescriptions.length === 0 ? (
-            <div className="text-center py-12 border border-dashed border-gray-200 rounded-lg bg-gray-50">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-16 w-16 mx-auto text-gray-300 mb-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              <p className="text-gray-600 text-lg mb-2">No prescriptions found for today</p>
-              <p className="text-gray-500 mb-6">
-                Search for a patient to create a new prescription record
-              </p>
-            </div>
-          ) : (
-            !loading && (
-              <div>
-                <PrescriptionTableWithReceipts
-                  prescriptions={prescriptions.filter((prescription) => {
-                    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD format
-                    const prescriptionDate = prescription.DATE
-                      ? typeof prescription.DATE === 'string'
-                        ? prescription.DATE.split('T')[0]
-                        : prescription.DATE
-                      : ''
-                    return prescriptionDate === today
-                  })}
-                  onEditPrescription={(prescription) => {
-                    setEditingPrescription(prescription)
-                    setIsModalOpen(true)
-                  }}
-                  onDeletePrescription={(id) => {
-                    // Delete prescription
-                    window.api
-                      .deletePrescription(id)
-                      .then(() => {
-                        // Remove from local state
-                        setPrescriptions(prescriptions.filter((p) => p.id !== id))
-                        toast.success('Prescription deleted successfully')
-                      })
-                      .catch((error) => {
-                        console.error('Error deleting prescription:', error)
-                        toast.error('Failed to delete prescription')
-                      })
-                  }}
+
+            {/* Patient Details Display */}
+            {foundPatient && (
+              <div className="mb-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100 transition-all">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-medium text-gray-800 flex items-center">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-6 w-6 mr-2 text-blue-500"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+                    </svg>
+                    Patient Details
+                  </h2>
+                  <button
+                    onClick={() => setFoundPatient(null)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Patient Information Table */}
+                <div className="overflow-x-auto mb-6">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {/* Display all patient fields dynamically */}
+                      {Object.entries(foundPatient).map(([key, value], index) => {
+                        // Skip the id field as it's internal
+                        if (key === 'id') return null
+
+                        // Create a new row for every two fields
+                        if (index % 2 === 0) {
+                          const nextKey = Object.keys(foundPatient)[index + 1]
+                          const nextValue = nextKey ? foundPatient[nextKey] : null
+
+                          // Format the field names for display
+                          const formatFieldName = (field: string): string => {
+                            return field
+                              .replace(/_/g, ' ')
+                              .split(' ')
+                              .map(
+                                (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                              )
+                              .join(' ')
+                          }
+
+                          return (
+                            <tr key={key}>
+                              <td className="px-4 py-3 text-sm font-medium text-gray-500 bg-gray-50">
+                                {formatFieldName(key)}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                {value !== null && value !== undefined ? String(value) : 'N/A'}
+                              </td>
+
+                              {nextKey && nextKey !== 'id' && (
+                                <>
+                                  <td className="px-4 py-3 text-sm font-medium text-gray-500 bg-gray-50">
+                                    {formatFieldName(nextKey)}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-900">
+                                    {nextValue !== null && nextValue !== undefined
+                                      ? String(nextValue)
+                                      : 'N/A'}
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          )
+                        }
+                        return null
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-wrap gap-4 mt-6">
+                  {/* Show existing receipts for the patient if any */}
+                  {foundPatient && !currentReceipt && (
+                    <div className="w-full mb-4">
+                      {/* Check for existing receipts */}
+                      {(() => {
+                        // Make sure we have a valid patient ID
+                        console.log(foundPatient)
+
+                        // Use the patientReceipts from state instead of calling the async function directly
+                        if (patientReceipts.length > 0) {
+                          return (
+                            <div className="bg-white p-4 rounded-md shadow-sm mb-4">
+                              <h3 className="text-lg font-medium text-gray-800 mb-2">
+                                Existing Receipts
+                              </h3>
+                              <p className="text-sm text-gray-600 mb-3">
+                                This patient has {patientReceipts.length} existing receipt(s). You
+                                can continue with an existing receipt or create a new one.
+                              </p>
+
+                              <div className="space-y-2 mb-4">
+                                {patientReceipts.map((receipt) => (
+                                  <div
+                                    key={receipt.id}
+                                    className="border border-gray-200 rounded-md p-4 hover:bg-gray-50 transition-all shadow-sm"
+                                  >
+                                    <div className="flex justify-between items-center gap-4">
+                                      <div className="flex items-center gap-4">
+                                        {/* Receipt icon */}
+                                        <div className="bg-blue-50 p-2 rounded-full">
+                                          <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            className="h-6 w-6 text-blue-500"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                          >
+                                            <path
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              strokeWidth={2}
+                                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                            />
+                                          </svg>
+                                        </div>
+                                        {/* Receipt details */}
+                                        <div>
+                                          <p className="font-medium text-gray-800">
+                                            Receipt #
+                                            {typeof receipt['RECEIPT NO'] === 'string'
+                                              ? receipt['RECEIPT NO'].substring(0, 8)
+                                              : 'Unknown'}
+                                          </p>
+                                          <p className="text-sm text-gray-500">
+                                            Date:{' '}
+                                            {new Date(
+                                              receipt.DATE && typeof receipt.DATE === 'string'
+                                                ? receipt.DATE
+                                                : receipt.DATE && typeof receipt.DATE === 'number'
+                                                  ? receipt.DATE
+                                                  : Date.now()
+                                            ).toDateString()}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      {/* Action buttons */}
+                                      <div className="flex items-center gap-2">
+                                        {/* View button */}
+                                        <button
+                                          onClick={() => {
+                                            // Set this receipt for viewing
+                                            setEditingPrescription(receipt)
+                                            setIsModalOpen(true)
+                                          }}
+                                          className="px-3 py-1 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-md text-sm font-medium flex items-center"
+                                        >
+                                          <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            className="h-4 w-4 mr-1"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                          >
+                                            <path
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              strokeWidth={2}
+                                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                            />
+                                            <path
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              strokeWidth={2}
+                                              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                            />
+                                          </svg>
+                                          View
+                                        </button>
+                                        {/* Edit button */}
+                                        <button
+                                          onClick={() => {
+                                            // Set this receipt for editing
+                                            setEditingPrescription(receipt)
+                                            setIsModalOpen(true)
+                                          }}
+                                          className="px-3 py-1 bg-yellow-100 text-yellow-700 hover:bg-yellow-200 rounded-md text-sm font-medium flex items-center"
+                                        >
+                                          <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            className="h-4 w-4 mr-1"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                          >
+                                            <path
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              strokeWidth={2}
+                                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                            />
+                                          </svg>
+                                          Edit
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="border-t border-gray-200 pt-3 mt-2">
+                                <button
+                                  onClick={() => {
+                                    // Close other forms if open
+                                    if (showAddForm) setShowAddForm(false)
+                                    if (showReadingForm) setShowReadingForm(false)
+                                    // Open receipt form
+                                    setShowReceiptForm(true)
+                                  }}
+                                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
+                                >
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="h-5 w-5"
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                  >
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                  <span>Create New Receipt</span>
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        } else {
+                          // No existing receipts, show the create receipt button prominently
+                          return (
+                            <div className="bg-green-50 p-4 rounded-md shadow-sm mb-4 border border-green-200">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h3 className="text-lg font-medium text-gray-800 mb-2 flex items-center">
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      className="h-5 w-5 mr-2 text-green-500"
+                                      viewBox="0 0 20 20"
+                                      fill="currentColor"
+                                    >
+                                      <path
+                                        fillRule="evenodd"
+                                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                        clipRule="evenodd"
+                                      />
+                                    </svg>
+                                    Patient Found - Create Receipt First
+                                  </h3>
+                                  <p className="text-sm text-gray-600 mb-4">
+                                    Please create a receipt for this patient before adding
+                                    prescriptions or readings.
+                                  </p>
+                                </div>
+
+                                <button
+                                  onClick={() => {
+                                    // Close other forms if open
+                                    if (showAddForm) setShowAddForm(false)
+                                    if (showReadingForm) setShowReadingForm(false)
+                                    // Open receipt form
+                                    setShowReceiptForm(true)
+                                  }}
+                                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
+                                >
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="h-5 w-5"
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                  >
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                  <span>Create Receipt</span>
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        }
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Show Prescription and Reading buttons only after a receipt has been created */}
+                  {currentReceipt && (
+                    <>
+                      <button
+                        onClick={() => {
+                          // Close other forms if open
+                          if (showReceiptForm) setShowReceiptForm(false)
+                          if (showReadingForm) setShowReadingForm(false)
+                          // Open prescription form
+                          setShowAddForm(true)
+                          if (hasPrescription) {
+                            // If editing, load the existing prescription data into the form
+                            // We can use the current receipt data since it contains the prescription
+                            setEditingPrescription(currentReceipt)
+                            setIsModalOpen(true)
+                            // Show toast message indicating edit mode
+                            toast.info('Editing existing prescription')
+                          } else {
+                            // If adding new, clear any editing state
+                            setEditingPrescription(null)
+                            setShowAddForm(true)
+                            setIsModalOpen(false)
+                          }
+                        }}
+                        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          {hasPrescription ? (
+                            // Edit icon
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                          ) : (
+                            // Add prescription icon
+                            <>
+                              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                              <path
+                                fillRule="evenodd"
+                                d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+                                clipRule="evenodd"
+                              />
+                            </>
+                          )}
+                        </svg>
+                        <span>{hasPrescription ? 'Edit Prescription' : 'Add Prescription'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          // Close other forms if open
+                          if (showAddForm) setShowAddForm(false)
+                          if (showReceiptForm) setShowReceiptForm(false)
+
+                          if (hasEyeReading) {
+                            // If editing, open the eye reading edit modal with the current receipt data
+                            setEditingEyeReading(currentReceipt)
+                            setIsEyeReadingModalOpen(true)
+                            // Show toast message indicating edit mode
+                            toast.info('Editing existing eye reading')
+                          } else {
+                            // If adding new, open the reading form
+                            setShowReadingForm(true)
+                            setEditingPrescription(null)
+                          }
+                        }}
+                        className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          {hasEyeReading ? (
+                            // Edit icon
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                          ) : (
+                            // Eye reading chart icon
+                            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+                          )}
+                        </svg>
+                        <span>{hasEyeReading ? 'Edit Eye Reading' : 'Add Eye Reading'}</span>
+                      </button>
+                    </>
+                  )}
+
+                  {/* If there's a current receipt, show a button to finish and reset */}
+                  {currentReceipt && (
+                    <button
+                      onClick={handleCompleteVisit}
+                      className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <span>Complete Patient Visit</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Add Prescription Form */}
+            {showAddForm && (
+              <div className="mb-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100 transition-all">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-medium text-gray-800 flex items-center">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-6 w-6 mr-2 text-blue-500"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                      <path
+                        fillRule="evenodd"
+                        d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    New Prescription
+                  </h2>
+                  <button
+                    onClick={() => setShowAddForm(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                <PrescriptionForm
+                  onSubmit={handleAddPrescription}
+                  onCancel={() => setShowAddForm(false)}
+                  prescriptionCount={prescriptions.length}
+                  patients={patients}
+                  selectedPatient={foundPatient}
                 />
               </div>
-            )
-          )}
-        </div>
+            )}
+
+            {/* Receipt Form */}
+            {showReceiptForm && (
+              <div className="mb-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100 transition-all">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-medium text-gray-800 flex items-center">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 mr-2 text-gray-500"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span>Create Receipt</span>
+                  </h2>
+                  <button
+                    onClick={() => setShowReceiptForm(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                <ReceiptForm
+                  onSubmit={handleAddReceipt}
+                  onCancel={() => setShowReceiptForm(false)}
+                  patients={patients.map(convertToReceiptFormPatient)}
+                  selectedPatient={foundPatient ? convertToReceiptFormPatient(foundPatient) : null}
+                />
+              </div>
+            )}
+
+            {/* Add Reading Form */}
+            {showReadingForm && (
+              <div className="mb-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100 transition-all">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-medium text-gray-800 flex items-center">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-6 w-6 mr-2 text-purple-500"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+                    </svg>
+                    New Eye Reading
+                  </h2>
+                  <button
+                    onClick={() => setShowReadingForm(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                <ReadingForm
+                  onSubmit={handleAddReading}
+                  onCancel={() => setShowReadingForm(false)}
+                  patients={patients.map(convertToReceiptFormPatient)}
+                  selectedPatient={foundPatient ? convertToReceiptFormPatient(foundPatient) : null}
+                />
+              </div>
+            )}
+
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-medium text-gray-800 flex items-center">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6 mr-2 text-blue-500"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                    <path
+                      fillRule="evenodd"
+                      d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Prescription Records (
+                  {selectedDate === new Date().toISOString().split('T')[0]
+                    ? 'Today'
+                    : new Date(selectedDate).toLocaleDateString()}
+                  )
+                </h2>
+                <div className="text-sm text-gray-500">
+                  {!loading && prescriptions.length > 0 && (
+                    <span>
+                      {
+                        prescriptions.filter((prescription) => {
+                          const prescriptionDate = prescription.DATE
+                            ? typeof prescription.DATE === 'string'
+                              ? prescription.DATE.split('T')[0]
+                              : prescription.DATE
+                            : ''
+                          return prescriptionDate === selectedDate
+                        }).length
+                      }{' '}
+                      {selectedDate === new Date().toISOString().split('T')[0]
+                        ? "today's"
+                        : "selected date's"}{' '}
+                      {prescriptions.filter((prescription) => {
+                        const prescriptionDate = prescription.DATE
+                          ? typeof prescription.DATE === 'string'
+                            ? prescription.DATE.split('T')[0]
+                            : prescription.DATE
+                          : ''
+                        return prescriptionDate === selectedDate
+                      }).length === 1
+                        ? 'record'
+                        : 'records'}{' '}
+                      found
+                    </span>
+                  )}
+                </div>
+              </div>
+              {loading && (
+                <div className="flex items-center justify-center py-10">
+                  <div className="flex flex-col items-center">
+                    <svg
+                      className="animate-spin h-8 w-8 text-blue-500"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    <p className="mt-3 text-gray-500">Loading prescriptions...</p>
+                  </div>
+                </div>
+              )}
+              {!loading && prescriptions.length === 0 ? (
+                <div className="text-center py-12 border border-dashed border-gray-200 rounded-lg bg-gray-50">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-16 w-16 mx-auto text-gray-300 mb-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  <p className="text-gray-600 text-lg mb-2">No prescriptions found for today</p>
+                  <p className="text-gray-500 mb-6">
+                    Search for a patient to create a new prescription record
+                  </p>
+                </div>
+              ) : (
+                !loading && (
+                  <div>
+                    <PrescriptionTableWithReceipts
+                      prescriptions={prescriptions.filter((prescription) => {
+                        const prescriptionDate = prescription.DATE
+                          ? typeof prescription.DATE === 'string'
+                            ? prescription.DATE.split('T')[0]
+                            : prescription.DATE
+                          : ''
+                        return prescriptionDate === selectedDate
+                      })}
+                      onEditPrescription={(prescription) => {
+                        setEditingPrescription(prescription)
+                        setIsModalOpen(true)
+                      }}
+                      onDeletePrescription={(id) => {
+                        // Delete prescription
+                        window.api
+                          .deletePrescription(id)
+                          .then(() => {
+                            // Remove from local state
+                            setPrescriptions(prescriptions.filter((p) => p.id !== id))
+                            toast.success('Prescription deleted successfully')
+                          })
+                          .catch((error) => {
+                            console.error('Error deleting prescription:', error)
+                            toast.error('Failed to delete prescription')
+                          })
+                      }}
+                    />
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {isModalOpen && editingPrescription && (
@@ -1687,6 +2037,17 @@ const Prescriptions: React.FC = () => {
       )}
       {/* Toast Container */}
       <Toaster />
+
+      {/* Operation Details Modal */}
+      <OperationDetailsModal
+        isOpen={showOperationDetailsModal}
+        onClose={() => setShowOperationDetailsModal(false)}
+        selectedInPatient={selectedInPatient}
+        operationDetails={operationDetails}
+        onOperationDetailsChange={handleOperationDetailsChange}
+        onSave={handleSaveOperationDetails}
+        prescriptions={prescriptions}
+      />
     </div>
   )
 }

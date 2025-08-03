@@ -60,6 +60,30 @@ interface Operation {
   [key: string]: unknown
 }
 
+interface InPatient {
+  id?: string
+  date: string
+  patientId: string
+  name: string
+  age: number
+  gender: string
+  phone: string
+  address: string
+  dateOfBirth?: string
+  guardianName?: string
+  operationName: string
+  department: string
+  doctorNames: string[]
+  onDutyDoctor?: string
+  referredBy?: string
+  packageAmount: number
+  packageInclusions?: string[]
+  createdBy?: string
+  created_at?: string
+  updated_at?: string
+  [key: string]: unknown
+}
+
 interface Medicine {
   id?: string
   name: string
@@ -120,6 +144,7 @@ const api = {
   searchPrescriptions: (searchTerm: string) =>
     ipcRenderer.invoke('searchPrescriptions', searchTerm),
   getTodaysPrescriptions: () => ipcRenderer.invoke('getTodaysPrescriptions'),
+  getPrescriptionsByDate: (date: string) => ipcRenderer.invoke('getPrescriptionsByDate', date),
   getLatestPrescriptionId: () => ipcRenderer.invoke('getLatestPrescriptionId'),
 
   // Labs Management
@@ -137,6 +162,15 @@ const api = {
   addOperation: (operation: Operation) => ipcRenderer.invoke('addOperation', operation),
   updateOperation: (id: string, operation: Operation) =>
     ipcRenderer.invoke('updateOperation', id, operation),
+
+  // In-Patient Management
+  getInPatients: () => ipcRenderer.invoke('getInPatients'),
+  getInPatientById: (id: string) => ipcRenderer.invoke('getInPatientById', id),
+  getLatestInPatientId: () => ipcRenderer.invoke('getLatestinPatientId'),
+  addInPatient: (inpatient: InPatient) => ipcRenderer.invoke('addInPatient', inpatient),
+  updateInPatient: (id: string, inpatient: InPatient) =>
+    ipcRenderer.invoke('updateInPatient', { id, inpatientData: inpatient }),
+  deleteInPatient: (id: string) => ipcRenderer.invoke('deleteInPatient', id),
   deleteOperation: (id: string) => ipcRenderer.invoke('deleteOperation', id),
 
   // Patient Search (used by multiple modules)
