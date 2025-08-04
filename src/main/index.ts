@@ -12,6 +12,7 @@ import bcrypt from 'bcryptjs'
 import XLSX from 'xlsx'
 import { v4 as uuidv4 } from 'uuid'
 import crypto from 'crypto'
+import { toZonedTime } from 'date-fns-tz'
 
 // Define interfaces for better type safety
 interface StaffMember {
@@ -903,14 +904,30 @@ import { supabase } from './supabaseClient'
 // Get today's patients
 ipcMain.handle('getTodaysPatients', async () => {
   try {
-    // Get today's date in YYYY-MM-DD format
-    const todayDate = new Date().toISOString().split('T')[0]
+    // Get current date in Indian timezone
+    const indianTime = toZonedTime(new Date(), 'Asia/Kolkata')
 
-    // Fetch today's patients from Supabase
+    // Create start of day timestamp (00:00:00) in Indian timezone
+    const startOfDay = new Date(indianTime)
+    startOfDay.setHours(0, 0, 0, 0)
+
+    // Create end of day timestamp (23:59:59.999) in Indian timezone
+    const endOfDay = new Date(indianTime)
+    endOfDay.setHours(23, 59, 59, 999)
+
+    // Convert to ISO strings for Supabase query
+    const startTimestamp = startOfDay.toISOString()
+    const endTimestamp = endOfDay.toISOString()
+
+    console.log(`Fetching patients between ${startTimestamp} and ${endTimestamp}`)
+
+    // Since the date field may include time information, we need to use LIKE query
+    // to match records where the date part starts with today's date
     const { data: patients, error } = await supabase
       .from('patients')
       .select('*')
-      .eq('date', todayDate)
+      .gte('created_at', startTimestamp)
+      .lte('created_at', endTimestamp)
       .order('patientId', { ascending: false })
 
     if (error) {
@@ -1051,6 +1068,31 @@ ipcMain.handle('getLatestPatientId', async () => {
       return
     }
     const maxId = Math.max(...patientIds)
+    console.log('Max Patient ID:', maxId)
+    return { success: true, data: maxId || 0, message: 'Latest patient ID fetched successfully' }
+  } catch (error) {
+    console.error('Error getting latest patient ID from Supabase:', error)
+    return {
+      success: false,
+      data: 0,
+      message: `Failed to fetch latest patient ID: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }
+  }
+})
+
+ipcMain.handle('getLatestInPatientId', async () => {
+  try {
+    // First try Supabase - just get the count
+    const { data, error } = await supabase.from('inpatients').select('id')
+
+    if (error) {
+      throw new Error(`Supabase error: ${error.message}`)
+    }
+    if (data.length === 0) {
+      console.log('No valid patient IDs found.')
+      return
+    }
+    const maxId = Math.max(...data.map((item) => item.id))
     console.log('Max Patient ID:', maxId)
     return { success: true, data: maxId || 0, message: 'Latest patient ID fetched successfully' }
   } catch (error) {
@@ -3272,6 +3314,8 @@ interface AnalyticsData {
     medicines: number
     opticals: number
     operations: number
+    labs: number
+    vlabs: number
     pending: number
   }
   medicineStats: {
@@ -4048,7 +4092,6 @@ async function generateAnalyticsData(
         const recordDate = new Date(record.DATE.toString())
         return recordDate >= start && recordDate <= end
       })
-
       // Calculate revenue from labs
       filteredLabRecords.forEach((record) => {
         const amount = Number(record['AMOUNT RECEIVED']) || 0
@@ -4067,7 +4110,6 @@ async function generateAnalyticsData(
         }
       })
     }
-
     // Generate time series data from actual records
     const timeSeriesData: TimeSeriesData = {
       labels: [],

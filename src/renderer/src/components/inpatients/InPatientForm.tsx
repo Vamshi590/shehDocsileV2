@@ -104,7 +104,7 @@ const InPatientForm: React.FC<InPatientFormProps> = ({
         // Only proceed if we're not in edit mode and either we don't have a patient ID yet or force is true
         if ((!initialValues?.id && !formData.patientId) || force) {
           const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
-          const response = (await api.getLatestPatientId()) as StandardizedResponse<{
+          const response = (await api.getLatestInPatientId()) as StandardizedResponse<{
             latestId: string
           }>
 
@@ -220,12 +220,13 @@ const InPatientForm: React.FC<InPatientFormProps> = ({
   ): void => {
     const { name, value } = e.target
 
-    // Special handling for age to ensure it's a number
+    // Special handling for age to ensure it's a valid number but stored as string
     if (name === 'age') {
-      const numValue = value === '' ? '' : parseInt(value, 10)
+      // Parse the value to ensure it's a valid number, but store as string
+      const parsedValue = value === '' ? '' : String(parseInt(value, 10))
       setFormData((prev) => ({
         ...prev,
-        [name]: numValue
+        [name]: parsedValue
       }))
       return
     }

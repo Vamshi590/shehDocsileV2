@@ -166,7 +166,7 @@ const api = {
   // In-Patient Management
   getInPatients: () => ipcRenderer.invoke('getInPatients'),
   getInPatientById: (id: string) => ipcRenderer.invoke('getInPatientById', id),
-  getLatestInPatientId: () => ipcRenderer.invoke('getLatestinPatientId'),
+  getLatestInPatientId: () => ipcRenderer.invoke('getLatestInPatientId'),
   addInPatient: (inpatient: InPatient) => ipcRenderer.invoke('addInPatient', inpatient),
   updateInPatient: (id: string, inpatient: InPatient) =>
     ipcRenderer.invoke('updateInPatient', { id, inpatientData: inpatient }),

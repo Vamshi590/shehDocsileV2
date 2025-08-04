@@ -8,7 +8,8 @@ import ReceiptForm, { Patient as ReceiptPatient } from '../components/prescripti
 import ReceiptViewer from '../components/reports/ReceiptViewer'
 import { toast, Toaster } from 'sonner'
 import InPatients from './InPatients'
-
+import { format, parseISO } from 'date-fns'
+import { toZonedTime, formatInTimeZone } from 'date-fns-tz'
 // Define types for API responses
 interface ApiResponse<T> {
   success: boolean
@@ -49,7 +50,7 @@ export interface Patient {
   gender: string
   phone: string
   address: string
-  date: string
+  date?: string
   dob: string
   guardian: string
   status?: string
@@ -57,6 +58,7 @@ export interface Patient {
   department?: string
   referredBy?: string
   createdBy?: string
+  created_at?: string // Add created_at field from database
   // Optional uppercase variants for ReceiptForm compatibility
   NAME?: string
   AGE?: string
@@ -114,7 +116,14 @@ const Patients: React.FC = () => {
         console.log(response)
 
         if (response.success) {
-          setPatients(response.data)
+          // Format the created_at timestamp in Indian timezone with time in 24-hour format
+          const formattedPatients = response.data.map((patient) => ({
+            ...patient,
+            date: patient.created_at
+              ? formatInTimeZone(parseISO(patient.created_at), 'Asia/Kolkata', 'dd-MM-yyyy HH:mm')
+              : undefined
+          }))
+          setPatients(formattedPatients)
           // Optional success toast
           // toast.success(response.message)
         } else {
@@ -189,7 +198,7 @@ const Patients: React.FC = () => {
       const receiptData = {
         ...formData,
         TYPE: 'RECEIPT',
-        DATE: formData?.date || new Date().toISOString().split('T')[0],
+        DATE: format(toZonedTime(new Date(), 'Asia/Kolkata'), 'yyyy-MM-dd') || formData?.date,
         'PATIENT ID': selectedPatient?.patientId || formData.patientId || '',
         'PATIENT NAME': selectedPatient?.name || formData['PATIENT NAME'] || '',
         GENDER: selectedPatient?.gender || formData.GENDER || '',
@@ -217,7 +226,8 @@ const Patients: React.FC = () => {
           GENDER: String(selectedPatient?.gender || formData.GENDER || ''),
           AGE: String(selectedPatient?.age || formData.AGE || ''),
           TYPE: 'RECEIPT',
-          DATE: String(formData.date || new Date().toISOString().split('T')[0]),
+          DATE:
+            String(format(toZonedTime(new Date(), 'Asia/Kolkata'), 'yyyy-MM-dd')) || formData?.date,
           'CREATED BY': String(
             JSON.parse(localStorage.getItem('currentUser') || '{}')?.fullName || 'Unknown User'
           ),
@@ -579,7 +589,7 @@ const Patients: React.FC = () => {
             gender: selectedPatient.gender,
             phone: selectedPatient.phone,
             address: selectedPatient.address,
-            date: selectedPatient.date,
+            date: selectedPatient.date || '',
             dob: selectedPatient.dob,
             guardian: selectedPatient.guardian,
             status: selectedPatient.status,

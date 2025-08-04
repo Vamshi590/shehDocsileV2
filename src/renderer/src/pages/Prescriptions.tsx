@@ -8,6 +8,8 @@ import ReadingForm from '../components/prescriptions/ReadingForm'
 import OperationDetailsModal from '../components/operations/OperationDetailsModal'
 import { toast, Toaster } from 'sonner'
 import { InPatient } from '../pages/InPatients'
+import { format } from 'date-fns'
+import { toZonedTime } from 'date-fns-tz'
 
 // Define the Prescription type
 export type Prescription = {
@@ -86,7 +88,9 @@ const Prescriptions: React.FC = () => {
   const [hasPrescription, setHasPrescription] = useState<boolean>(false)
   const [hasEyeReading, setHasEyeReading] = useState<boolean>(false)
   // Track the selected date for filtering prescriptions
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0])
+  const [selectedDate, setSelectedDate] = useState<string>(
+    format(toZonedTime(new Date(), 'Asia/Kolkata'), 'yyyy-MM-dd')
+  )
   // Track patient receipts
   const [patientReceipts, setPatientReceipts] = useState<Prescription[]>([])
   // OP/IP Toggle state

@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 
 interface Patient {
   id: string
-  date: string
+  date?: string
   patientId: string
   name: string
   guardian: string

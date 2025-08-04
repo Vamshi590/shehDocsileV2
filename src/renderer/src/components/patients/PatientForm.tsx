@@ -7,6 +7,8 @@ import {
 } from '../../utils/dropdownOptions'
 import EditableCombobox from '../common/EditableCombobox'
 import { toast } from 'sonner'
+import { format } from 'date-fns'
+import { toZonedTime } from 'date-fns-tz'
 
 // Standardized API response format
 interface StandardizedResponse<T> {
@@ -77,7 +79,7 @@ const PatientForm: React.FC<PatientFormProps> = ({
   // This section intentionally left empty as the ExtendedFormData interface is now defined at the top level
 
   const [formData, setFormData] = useState<ExtendedFormData>({
-    date: initialValues?.date || String(new Date().toISOString().split('T')[0]),
+    date: initialValues?.date || format(toZonedTime(new Date(), 'Asia/Kolkata'), 'yyyy-MM-dd'),
     patientId: initialValues?.patientId || '',
     name: initialValues?.name || '',
     guardian: initialValues?.guardian || '',

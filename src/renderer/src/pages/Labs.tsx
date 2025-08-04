@@ -410,9 +410,9 @@ const Labs: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm sticky top-0 z-10 mb-6">
-        <div className="max-w-7xl mx-auto px-6 py-4 sm:px-8 lg:px-10 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto py-4 px-4 flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-medium text-gray-800">Labs</h1>
+            <h1 className="text-2xl font-medium text-gray-800">Labs Management</h1>
             <p className="text-sm text-gray-500">Sri Harsha Eye Hospital</p>
           </div>
           <div className="flex items-center space-x-3">
@@ -459,7 +459,7 @@ const Labs: React.FC = () => {
         </div>
       </header>
       {/* Search Bar */}
-      <div className="max-w-7xl mx-auto px-6 py-4 sm:px-8 lg:px-10 mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+      <div className="max-w-7xl mx-auto mb-2 bg-white p-4 rounded-lg shadow-sm border border-gray-100">
         <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
           Search Patients
         </label>
@@ -637,7 +637,7 @@ const Labs: React.FC = () => {
       )}
 
       {/* Labs Table Section */}
-      <div className="max-w-7xl mx-auto px-6 py-4 sm:px-8 lg:px-10 mb-8 bg-white p-4 rounded-lg border border-gray-100">
+      <div className="max-w-7xl mx-auto px-6 py-4 sm:px-8 lg:px-10 mb-8 bg-white p-4 rounded-lg border border-gray-300">
         <h2 className="text-xl font-semibold mb-4">Lab Records</h2>
         {isLoading ? (
           <div className="text-center py-4">Loading labs data...</div>
