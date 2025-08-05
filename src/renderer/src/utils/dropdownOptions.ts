@@ -53,14 +53,7 @@ export const referredByOptions = [
   'Clinic'
 ]
 
-export const doctorOptions = [
-  'Dr. Srilatha ch',
-  'Dr. Sheh',
-  'Dr. Ravi Kumar',
-  'Dr. Priya Sharma',
-  'Dr. Anand Reddy',
-  'Dr. Meena Patel'
-]
+export const doctorOptions = ['Dr. Srilatha ch', 'Dr. Ekta Agarwal']
 
 export const statusOptions = ['Regular', 'Follow Up', 'Emergency']
 
@@ -517,3 +510,6 @@ export const vaOptions = [
   'PL',
   'NPL'
 ]
+
+// Special options for near SPH fields with add options
+export const nearSphOptions = ['add 1', 'add 2', 'add 3', ...sphOptions]

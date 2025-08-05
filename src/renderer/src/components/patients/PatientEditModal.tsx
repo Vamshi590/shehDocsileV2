@@ -1,5 +1,6 @@
 import React from 'react'
 import PatientForm from './PatientForm'
+import { format } from 'date-fns'
 
 interface Patient {
   id: string
@@ -48,7 +49,7 @@ const PatientEditModal = ({
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-50 bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
@@ -73,7 +74,7 @@ const PatientEditModal = ({
 
           <PatientForm
             initialValues={{
-              date: patient.date,
+              date: format(patient.date, 'yyyy-dd-MM'),
               patientId: patient.patientId,
               name: patient.name,
               guardian: patient.guardian,

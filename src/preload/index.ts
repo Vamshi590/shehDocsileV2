@@ -170,6 +170,8 @@ const api = {
   addInPatient: (inpatient: InPatient) => ipcRenderer.invoke('addInPatient', inpatient),
   updateInPatient: (id: string, inpatient: InPatient) =>
     ipcRenderer.invoke('updateInPatient', { id, inpatientData: inpatient }),
+  updateInPatientAll: (id: string, inpatient: InPatient) =>
+    ipcRenderer.invoke('updateInPatientAll', { id, inpatientData: inpatient }),
   deleteInPatient: (id: string) => ipcRenderer.invoke('deleteInPatient', id),
   deleteOperation: (id: string) => ipcRenderer.invoke('deleteOperation', id),
 
@@ -268,6 +270,8 @@ const api = {
   // Dropdown Options Management
   addDropdownOption: (fieldName: string, newValue: string) =>
     ipcRenderer.invoke('addDropdownOption', fieldName, newValue),
+  deleteDropdownOption: (fieldName: string, optionValue: string) =>
+    ipcRenderer.invoke('deleteDropdownOption', fieldName, optionValue),
   getDropdownOptions: (fieldName: string) => ipcRenderer.invoke('getDropdownOptions', fieldName),
 
   // PDF Management

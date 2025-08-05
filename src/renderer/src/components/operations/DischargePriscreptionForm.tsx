@@ -56,6 +56,7 @@ declare global {
 
 interface DischargePriscreptionFormProps {
   onSubmit: (data: Record<string, unknown>) => Promise<void>
+  onCancel: () => void
   prescriptionCount: number // Make this required
   initialData?: Record<string, unknown>
   selectedPatient?: InPatient | null
@@ -290,7 +291,6 @@ const DischargePriscreptionForm: React.FC<DischargePriscreptionFormProps> = ({
 
   return (
     <form id="discharge-prescription-form" onSubmit={handleSubmit} className="space-y-6">
-
       {/* Prescription Section */}
       <div className="border border-gray-200 p-4 rounded-md">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Prescription Details</h3>

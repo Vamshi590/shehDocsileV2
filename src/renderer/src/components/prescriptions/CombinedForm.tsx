@@ -3,7 +3,7 @@ import { JSX, useEffect, useState } from 'react'
 import EditableCombobox from '../common/EditableCombobox'
 import { Patient } from './ReceiptForm'
 // Standard options for eye prescription fields and prescription options
-import { axisOptions, cylOptions, sphOptions, vaOptions, medicineOptions, adviceOptions, timingOptions } from '../../utils/dropdownOptions'
+import { axisOptions, cylOptions, sphOptions, nearSphOptions, vaOptions, medicineOptions, adviceOptions, timingOptions } from '../../utils/dropdownOptions'
 interface ReadingFormData {
     patientId: string
 
@@ -228,9 +228,9 @@ const CombinedForm = ({
         'PREVIOUS HISTORY': (initialData?.['PREVIOUS HISTORY'] as string) || '',
         OTHERS: (initialData?.['OTHERS'] as string) || '',
         OTHERS1: (initialData?.['OTHERS1'] as string) || '',
-        TEMPARATURE : (initialData?.['TEMPARATURE'] as string) || '',
-        'P.R.' : (initialData?.['P.R.'] as string) || '',
-        'SPO2' : (initialData?.['SPO2'] as string) || '',
+        TEMPARATURE: (initialData?.['TEMPARATURE'] as string) || '',
+        'P.R.': (initialData?.['P.R.'] as string) || '',
+        'SPO2': (initialData?.['SPO2'] as string) || '',
         // Prescription fields
         'PRESCRIPTION 1': (initialData?.['PRESCRIPTION 1'] as string) || '',
         'DAYS 1': (initialData?.['DAYS 1'] as string) || '',
@@ -466,15 +466,15 @@ const CombinedForm = ({
         const timing = formData[timingField] as string;
 
         // Only save if all fields are filled
-        if (medicine && medicine.trim() !== '' && 
-            days && days.trim() !== '' && 
+        if (medicine && medicine.trim() !== '' &&
+            days && days.trim() !== '' &&
             timing && timing.trim() !== '') {
 
             // Create updated combinations - don't depend on current medicineCombinations state
             // to avoid infinite loop
             const savedCombinations = localStorage.getItem('medicineCombinations');
             let currentCombinations = {};
-            
+
             try {
                 if (savedCombinations) {
                     currentCombinations = JSON.parse(savedCombinations);
@@ -482,17 +482,17 @@ const CombinedForm = ({
             } catch (error) {
                 console.error('Error parsing saved combinations:', error);
             }
-            
+
             const newCombinations = {
                 ...currentCombinations,
                 [medicine]: { days, timing }
             };
-            
+
             // Save to localStorage first
             try {
                 localStorage.setItem('medicineCombinations', JSON.stringify(newCombinations));
                 console.log('Saving updated combination for:', medicine, { days, timing });
-                
+
                 // Then update state - but only if it's different to avoid loop
                 if (JSON.stringify(medicineCombinations[medicine]) !== JSON.stringify({ days, timing })) {
                     setMedicineCombinations(newCombinations);
@@ -500,7 +500,7 @@ const CombinedForm = ({
             } catch (error) {
                 console.error('Error saving medicine combinations:', error);
             }
-            
+
             // Clear the last changed field to prevent repeated updates
             setLastChanged(null);
         }
@@ -511,27 +511,56 @@ const CombinedForm = ({
         e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
     ): void => {
         const { name, value } = e.target;
-        
-        // Update the form data with the new value
+
+        // Handle special add options for near SPH fields
+        if ((name === 'SR-RE-N-SPH' || name === 'SR-LE-N-SPH') && value.startsWith('add ')) {
+            // Extract the number to add (1, 2, or 3)
+            const addValue = parseInt(value.split(' ')[1]);
+            
+            // Get the corresponding distance SPH value
+            const distanceFieldName = name === 'SR-RE-N-SPH' ? 'SR-RE-D-SPH' : 'SR-LE-D-SPH';
+            const distanceSphValue = formData[distanceFieldName] as string;
+            
+            // Only proceed if we have a valid distance SPH value
+            if (distanceSphValue && !isNaN(parseFloat(distanceSphValue))) {
+                // Calculate the new SPH value by adding the selected value to the distance SPH
+                const distanceValue = parseFloat(distanceSphValue);
+                const newValue = (distanceValue + addValue).toFixed(2);
+                
+                // Format the new value to match SPH options format
+                const formattedValue = newValue.startsWith('-') ? newValue : `+${newValue}`;
+                
+                // Update the form data with the calculated value
+                setFormData(prevData => ({
+                    ...prevData,
+                    [name]: formattedValue
+                }));
+                
+                // Exit early since we've already updated the form data
+                return;
+            }
+        }
+
+        // For all other cases, update the form data with the new value
         setFormData(prevData => ({
             ...prevData,
             [name]: value
         }));
-        
+
         // Handle medicine field autofill
         if (name.startsWith('PRESCRIPTION ')) {
             const prescriptionNum = name.split(' ')[1];
-            
+
             // If we have saved data for this medicine, autofill related fields
             if (medicineCombinations[value]) {
                 const savedDays = medicineCombinations[value].days;
                 const savedTiming = medicineCombinations[value].timing;
-                
+
                 // Autofill the days and timing fields if they're empty
                 setFormData(prevData => {
                     const currentDays = prevData[`DAYS ${prescriptionNum}`] as string;
                     const currentTiming = prevData[`TIMING ${prescriptionNum}`] as string;
-                    
+
                     return {
                         ...prevData,
                         [`DAYS ${prescriptionNum}`]: (!currentDays || currentDays === '') ? savedDays : currentDays,
@@ -539,7 +568,7 @@ const CombinedForm = ({
                     };
                 });
             }
-            
+
             // Track this change for medicine combination updates
             setLastChanged({
                 prescriptionNum,
@@ -547,7 +576,7 @@ const CombinedForm = ({
                 value
             });
         }
-        
+
         // Track days field changes
         else if (name.startsWith('DAYS ')) {
             const prescriptionNum = name.split(' ')[1];
@@ -557,7 +586,7 @@ const CombinedForm = ({
                 value
             });
         }
-        
+
         // Track timing field changes
         else if (name.startsWith('TIMING ')) {
             const prescriptionNum = name.split(' ')[1];
@@ -573,33 +602,33 @@ const CombinedForm = ({
     // Helper function to compare initial data with current form data
     const hasFieldChanged = (key: string, currentValue: unknown): boolean => {
         if (!initialData) return true; // If no initial data, consider everything changed
-        
+
         // Handle special case for numeric values
         if (typeof currentValue === 'number' && typeof initialData[key] === 'string') {
             return currentValue.toString() !== initialData[key];
         }
-        
+
         // Handle special case for string values
         if (typeof currentValue === 'string' && typeof initialData[key] === 'number') {
             return currentValue !== initialData[key].toString();
         }
-        
+
         // Regular comparison
         return JSON.stringify(currentValue) !== JSON.stringify(initialData[key]);
     };
-    
+
 
     // Handle form submission
     const handleSubmit = async (e: React.FormEvent): Promise<void> => {
         e.preventDefault()
 
 
-             // Filter entries to include only visible prescription/advice fields
-             const visibleEntries = Object.entries(formData).filter(([key]) =>
-                (key.startsWith('PRESCRIPTION') && parseInt(key.split(' ')[1]) <= visiblePrescription) ||
-                (key.startsWith('ADVICE') && parseInt(key.split(' ')[1]) <= visibleAdvice) ||
-                !key.startsWith('PRESCRIPTION') && !key.startsWith('ADVICE')
-            );
+        // Filter entries to include only visible prescription/advice fields
+        const visibleEntries = Object.entries(formData).filter(([key]) =>
+            (key.startsWith('PRESCRIPTION') && parseInt(key.split(' ')[1]) <= visiblePrescription) ||
+            (key.startsWith('ADVICE') && parseInt(key.split(' ')[1]) <= visibleAdvice) ||
+            !key.startsWith('PRESCRIPTION') && !key.startsWith('ADVICE')
+        );
 
         const changedFields: Record<string, unknown> = {};
 
@@ -609,7 +638,7 @@ const CombinedForm = ({
         }
 
         changedFields.patientId = formData.patientId;
-        
+
         visibleEntries.forEach(([key, value]) => {
             if (hasFieldChanged(key, value)) {
                 changedFields[key] = value;
@@ -628,27 +657,27 @@ const CombinedForm = ({
 
     const fetchDropdownOptions = async (): Promise<void> => {
         try {
-          const [presentComplainOpts, previousHistoryOpts, othersOpts] = await Promise.all([
-            window.api.getDropdownOptions('presentComplainOptions'),
-            window.api.getDropdownOptions('previousHistoryOptions'),
-            window.api.getDropdownOptions('othersOptions')
-          ])
-          console.log('Dropdown options:', presentComplainOpts, previousHistoryOpts, othersOpts)
-    
-          // Set dynamic options - API returns { success: boolean, options?: string[], error?: string }
-          const presentOptions = (presentComplainOpts as { options?: string[] })?.options || []
-          const previousOptions = (previousHistoryOpts as { options?: string[] })?.options || []
-          const othersOptions = (othersOpts as { options?: string[] })?.options || []
-    
-     
-    
-          setDynamicPresentComplainOptions([...new Set(presentOptions as string[])])
-          setDynamicPreviousHistoryOptions([...new Set(previousOptions as string[])])
-          setDynamicOthersOptions([...new Set(othersOptions as string[])])
+            const [presentComplainOpts, previousHistoryOpts, othersOpts] = await Promise.all([
+                window.api.getDropdownOptions('presentComplainOptions'),
+                window.api.getDropdownOptions('previousHistoryOptions'),
+                window.api.getDropdownOptions('othersOptions')
+            ])
+            console.log('Dropdown options:', presentComplainOpts, previousHistoryOpts, othersOpts)
+
+            // Set dynamic options - API returns { success: boolean, options?: string[], error?: string }
+            const presentOptions = (presentComplainOpts as { options?: string[] })?.options || []
+            const previousOptions = (previousHistoryOpts as { options?: string[] })?.options || []
+            const othersOptions = (othersOpts as { options?: string[] })?.options || []
+
+
+
+            setDynamicPresentComplainOptions([...new Set(presentOptions as string[])])
+            setDynamicPreviousHistoryOptions([...new Set(previousOptions as string[])])
+            setDynamicOthersOptions([...new Set(othersOptions as string[])])
         } catch (error) {
-          console.error('Error fetching dropdown options:', error)
+            console.error('Error fetching dropdown options:', error)
         }
-      }
+    }
 
     // Helper function to add new option permanently
     const addNewOptionPermanently = async (fieldName: string, value: string): Promise<void> => {
@@ -660,6 +689,21 @@ const CombinedForm = ({
             await fetchDropdownOptions()
         } catch (error) {
             console.error('Error adding new dropdown option:', error)
+        }
+    }
+    
+    // Helper function to delete option permanently
+    const deleteOptionPermanently = async (fieldName: string, value: string): Promise<void> => {
+        try {
+            console.log('Deleting option permanently:', fieldName, value)
+            const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
+            // Use the window.api interface to delete the option
+            const response = await api.deleteDropdownOption(fieldName, value)
+            console.log('Response:', response)
+            // Refresh options from backend
+            await fetchDropdownOptions()
+        } catch (error) {
+            console.error('Error deleting dropdown option:', error)
         }
     }
 
@@ -829,6 +873,254 @@ const CombinedForm = ({
                             />
                         </div>
                     </div>
+
+                    {/* Section 4: Present Glass Prescription */}
+                    <div className="bg-gray-100 p-3 rounded-md shadow-sm border border-gray-300">
+                        <h3 className="text-md font-medium mb-2 flex items-center">Present Glass Prescription</h3>
+
+                        {/* Right Eye - Distance */}
+                        <div className="mb-3">
+                            <h4 className="text-sm font-medium mb-1">Right Eye - Distance :</h4>
+                            <div className="grid grid-cols-4 gap-2">
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-700">SPH</label>
+                                    <EditableCombobox
+                                        id="SR-RE-D-SPH"
+                                        name="SR-RE-D-SPH"
+                                        value={formData['SR-RE-D-SPH']}
+                                        options={sphOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-700">CYL</label>
+                                    <EditableCombobox
+                                        id="SR-RE-D-CYL"
+                                        name="SR-RE-D-CYL"
+                                        value={formData['SR-RE-D-CYL']}
+                                        options={cylOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-700">AXIS</label>
+                                    <EditableCombobox
+                                        id="SR-RE-D-AXIS"
+                                        name="SR-RE-D-AXIS"
+                                        value={formData['SR-RE-D-AXIS']}
+                                        options={axisOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-700">VA</label>
+                                    <EditableCombobox
+                                        id="SR-RE-D-VA"
+                                        name="SR-RE-D-VA"
+                                        value={formData['SR-RE-D-VA']}
+                                        options={vaOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Right Eye - Near */}
+                        <div className="mb-3">
+                            <h4 className="text-sm font-medium mb-1">Near :</h4>
+                            <div className="grid grid-cols-4 gap-2">
+                                <div>
+                                    <EditableCombobox
+                                        id="SR-RE-N-SPH"
+                                        name="SR-RE-N-SPH"
+                                        value={formData['SR-RE-N-SPH']}
+                                        options={nearSphOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <EditableCombobox
+                                        id="SR-RE-N-CYL"
+                                        name="SR-RE-N-CYL"
+                                        value={formData['SR-RE-N-CYL']}
+                                        options={cylOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <EditableCombobox
+                                        id="SR-RE-N-AXIS"
+                                        name="SR-RE-N-AXIS"
+                                        value={formData['SR-RE-N-AXIS']}
+                                        options={axisOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <EditableCombobox
+                                        id="SR-RE-N-VA"
+                                        name="SR-RE-N-VA"
+                                        value={formData['SR-RE-N-VA']}
+                                        options={vaOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Left Eye - Distance */}
+                        <div className="mb-3">
+                            <h4 className="text-sm font-medium mb-1">Left Eye - Distance :</h4>
+                            <div className="grid grid-cols-4 gap-2">
+                                <div>
+                                    <EditableCombobox
+                                        id="SR-LE-D-SPH"
+                                        name="SR-LE-D-SPH"
+                                        value={formData['SR-LE-D-SPH']}
+                                        options={sphOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <EditableCombobox
+                                        id="SR-LE-D-CYL"
+                                        name="SR-LE-D-CYL"
+                                        value={formData['SR-LE-D-CYL']}
+                                        options={cylOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <EditableCombobox
+                                        id="SR-LE-D-AXIS"
+                                        name="SR-LE-D-AXIS"
+                                        value={formData['SR-LE-D-AXIS']}
+                                        options={axisOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <EditableCombobox
+                                        id="SR-LE-D-BCVA"
+                                        name="SR-LE-D-BCVA"
+                                        value={formData['SR-LE-D-BCVA']}
+                                        options={vaOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Left Eye - Near */}
+                        <div className="mb-1">
+                            <h4 className="text-sm font-medium mb-1">Near :</h4>
+                            <div className="grid grid-cols-4 gap-2">
+                                <div>
+                                    <EditableCombobox
+                                        id="SR-LE-N-SPH"
+                                        name="SR-LE-N-SPH"
+                                        value={formData['SR-LE-N-SPH']}
+                                        options={nearSphOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <EditableCombobox
+                                        id="SR-LE-N-CYL"
+                                        name="SR-LE-N-CYL"
+                                        value={formData['SR-LE-N-CYL']}
+                                        options={cylOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <EditableCombobox
+                                        id="SR-LE-N-AXIS"
+                                        name="SR-LE-N-AXIS"
+                                        value={formData['SR-LE-N-AXIS']}
+                                        options={axisOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <EditableCombobox
+                                        id="SR-LE-N-BCVA"
+                                        name="SR-LE-N-BCVA"
+                                        value={formData['SR-LE-N-BCVA']}
+                                        options={vaOptions}
+                                        onChange={handleComboboxChange}
+                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Sight Type Options */}
+                        <div className="mt-4 border-t pt-3 border-gray-300 w-full">
+                            <h4 className="text-sm font-medium mb-2">Sight Type:</h4>
+                            <div className="flex flex-wrap justify-between gap-4">
+                                {[
+                                    { id: 'distant', label: 'Distant' },
+                                    { id: 'near', label: 'Near' },
+                                    { id: 'bifocal', label: 'Bifocal' },
+                                    { id: 'progressive', label: 'Progressive' },
+                                    { id: 'photochromatic', label: 'Photochromatic' },
+                                    { id: 'brc-hmc', label: 'BRC HMC' }
+                                ].map((option) => (
+                                    <div key={option.id} className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            id={`sight-type-${option.id}`}
+                                            checked={typeof formData['SIGHTTYPE'] === 'string' && (formData['SIGHTTYPE'].includes(`${option.label}/`) || formData['SIGHTTYPE'].includes(`/${option.label}`) || formData['SIGHTTYPE'] === option.label || formData['SIGHTTYPE'].endsWith(`/${option.label}`)) || false}
+                                            onChange={(e) => {
+                                                const currentValues = typeof formData['SIGHTTYPE'] === 'string' ? formData['SIGHTTYPE'].split('/') : [];
+                                                let newValues: string[];
+
+                                                if (e.target.checked) {
+                                                    // Add the value if it doesn't exist
+                                                    if (!currentValues.includes(option.label)) {
+                                                        newValues = [...currentValues, option.label];
+                                                    } else {
+                                                        newValues = currentValues;
+                                                    }
+                                                } else {
+                                                    // Remove the value
+                                                    newValues = currentValues.filter(val => val !== option.label);
+                                                }
+
+                                                // Join with '/' and update form data
+                                                const newSightType = newValues.join('/');
+                                                setFormData({
+                                                    ...formData,
+                                                    'SIGHTTYPE': newSightType
+                                                });
+                                            }}
+                                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                        />
+                                        <label htmlFor={`sight-type-${option.id}`} className="ml-2 text-sm text-gray-700">
+                                            {option.label}
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Section 1: Glasses Reading (GR) */}
                     <div className="bg-gray-100 border border-gray-300 shadow-sm p-3 rounded-md">
                         <h3 className="text-md font-medium mb-2 flex items-center">Glasses Reading (GR)</h3>
@@ -1225,252 +1517,6 @@ const CombinedForm = ({
                         </div>
                     </div>
 
-                    {/* Section 4: Present Glass Prescription */}
-                    <div className="bg-gray-100 p-3 rounded-md shadow-sm border border-gray-300">
-                        <h3 className="text-md font-medium mb-2 flex items-center">Present Glass Prescription</h3>
-
-                        {/* Right Eye - Distance */}
-                        <div className="mb-3">
-                            <h4 className="text-sm font-medium mb-1">Right Eye - Distance :</h4>
-                            <div className="grid grid-cols-4 gap-2">
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-700">SPH</label>
-                                    <EditableCombobox
-                                        id="SR-RE-D-SPH"
-                                        name="SR-RE-D-SPH"
-                                        value={formData['SR-RE-D-SPH']}
-                                        options={sphOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-700">CYL</label>
-                                    <EditableCombobox
-                                        id="SR-RE-D-CYL"
-                                        name="SR-RE-D-CYL"
-                                        value={formData['SR-RE-D-CYL']}
-                                        options={cylOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-700">AXIS</label>
-                                    <EditableCombobox
-                                        id="SR-RE-D-AXIS"
-                                        name="SR-RE-D-AXIS"
-                                        value={formData['SR-RE-D-AXIS']}
-                                        options={axisOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-700">VA</label>
-                                    <EditableCombobox
-                                        id="SR-RE-D-VA"
-                                        name="SR-RE-D-VA"
-                                        value={formData['SR-RE-D-VA']}
-                                        options={vaOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Right Eye - Near */}
-                        <div className="mb-3">
-                            <h4 className="text-sm font-medium mb-1">Near :</h4>
-                            <div className="grid grid-cols-4 gap-2">
-                                <div>
-                                    <EditableCombobox
-                                        id="SR-RE-N-SPH"
-                                        name="SR-RE-N-SPH"
-                                        value={formData['SR-RE-N-SPH']}
-                                        options={sphOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <EditableCombobox
-                                        id="SR-RE-N-CYL"
-                                        name="SR-RE-N-CYL"
-                                        value={formData['SR-RE-N-CYL']}
-                                        options={cylOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <EditableCombobox
-                                        id="SR-RE-N-AXIS"
-                                        name="SR-RE-N-AXIS"
-                                        value={formData['SR-RE-N-AXIS']}
-                                        options={axisOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <EditableCombobox
-                                        id="SR-RE-N-VA"
-                                        name="SR-RE-N-VA"
-                                        value={formData['SR-RE-N-VA']}
-                                        options={vaOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Left Eye - Distance */}
-                        <div className="mb-3">
-                            <h4 className="text-sm font-medium mb-1">Left Eye - Distance :</h4>
-                            <div className="grid grid-cols-4 gap-2">
-                                <div>
-                                    <EditableCombobox
-                                        id="SR-LE-D-SPH"
-                                        name="SR-LE-D-SPH"
-                                        value={formData['SR-LE-D-SPH']}
-                                        options={sphOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <EditableCombobox
-                                        id="SR-LE-D-CYL"
-                                        name="SR-LE-D-CYL"
-                                        value={formData['SR-LE-D-CYL']}
-                                        options={cylOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <EditableCombobox
-                                        id="SR-LE-D-AXIS"
-                                        name="SR-LE-D-AXIS"
-                                        value={formData['SR-LE-D-AXIS']}
-                                        options={axisOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <EditableCombobox
-                                        id="SR-LE-D-BCVA"
-                                        name="SR-LE-D-BCVA"
-                                        value={formData['SR-LE-D-BCVA']}
-                                        options={vaOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Left Eye - Near */}
-                        <div className="mb-1">
-                            <h4 className="text-sm font-medium mb-1">Near :</h4>
-                            <div className="grid grid-cols-4 gap-2">
-                                <div>
-                                    <EditableCombobox
-                                        id="SR-LE-N-SPH"
-                                        name="SR-LE-N-SPH"
-                                        value={formData['SR-LE-N-SPH']}
-                                        options={sphOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <EditableCombobox
-                                        id="SR-LE-N-CYL"
-                                        name="SR-LE-N-CYL"
-                                        value={formData['SR-LE-N-CYL']}
-                                        options={cylOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <EditableCombobox
-                                        id="SR-LE-N-AXIS"
-                                        name="SR-LE-N-AXIS"
-                                        value={formData['SR-LE-N-AXIS']}
-                                        options={axisOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <EditableCombobox
-                                        id="SR-LE-N-BCVA"
-                                        name="SR-LE-N-BCVA"
-                                        value={formData['SR-LE-N-BCVA']}
-                                        options={vaOptions}
-                                        onChange={handleComboboxChange}
-                                        className="mt-1 block w-full border border-gray-300 bg-white rounded-md shadow-sm py-1 px-2 text-md font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Sight Type Options */}
-                        <div className="mt-4 border-t pt-3 border-gray-300 w-full">
-                            <h4 className="text-sm font-medium mb-2">Sight Type:</h4>
-                            <div className="flex flex-wrap justify-between gap-4">
-                                {[
-                                    { id: 'distant', label: 'Distant' },
-                                    { id: 'near', label: 'Near' },
-                                    { id: 'bifocal', label: 'Bifocal' },
-                                    { id: 'progressive', label: 'Progressive' },
-                                    { id: 'photochromatic', label: 'Photochromatic' },
-                                    { id: 'brc-hmc', label: 'BRC HMC' }
-                                ].map((option) => (
-                                    <div key={option.id} className="flex items-center">
-                                        <input
-                                            type="checkbox"
-                                            id={`sight-type-${option.id}`}
-                                            checked={typeof formData['SIGHTTYPE'] === 'string' && (formData['SIGHTTYPE'].includes(`${option.label}/`) || formData['SIGHTTYPE'].includes(`/${option.label}`) || formData['SIGHTTYPE'] === option.label || formData['SIGHTTYPE'].endsWith(`/${option.label}`)) || false}
-                                            onChange={(e) => {
-                                                const currentValues = typeof formData['SIGHTTYPE'] === 'string' ? formData['SIGHTTYPE'].split('/') : [];
-                                                let newValues: string[];
-                                                
-                                                if (e.target.checked) {
-                                                    // Add the value if it doesn't exist
-                                                    if (!currentValues.includes(option.label)) {
-                                                        newValues = [...currentValues, option.label];
-                                                    } else {
-                                                        newValues = currentValues;
-                                                    }
-                                                } else {
-                                                    // Remove the value
-                                                    newValues = currentValues.filter(val => val !== option.label);
-                                                }
-                                                
-                                                // Join with '/' and update form data
-                                                const newSightType = newValues.join('/');
-                                                setFormData({
-                                                    ...formData,
-                                                    'SIGHTTYPE': newSightType
-                                                });
-                                            }}
-                                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                        />
-                                        <label htmlFor={`sight-type-${option.id}`} className="ml-2 text-sm text-gray-700">
-                                            {option.label}
-                                        </label>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
 
                     {/* Section 5: Clinical Findings (CF) */}
                     <div className="p-3 bg-gray-100 border border-gray-300 rounded-md">
@@ -1931,6 +1977,9 @@ const CombinedForm = ({
                                 onAddNewOption={(_fieldName, value) =>
                                     addNewOptionPermanently('presentComplainOptions', value)
                                 }
+                                onDeleteOption={(_fieldName, value) =>
+                                    deleteOptionPermanently('presentComplainOptions', value)
+                                }
                                 placeholder="Select or type present complain..."
                                 className="mt-1 block w-full border border-gray-300 bg-white font-semibold rounded-md  py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                             />
@@ -1950,6 +1999,9 @@ const CombinedForm = ({
                                 onAddNewOption={(_fieldName, value) =>
                                     addNewOptionPermanently('previousHistoryOptions', value)
                                 }
+                                onDeleteOption={(_fieldName, value) =>
+                                    deleteOptionPermanently('previousHistoryOptions', value)
+                                }
                                 placeholder="Select or type previous history..."
                                 className="mt-1 block w-full border border-gray-300 bg-white font-semibold rounded-md  py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                             />
@@ -1968,6 +2020,9 @@ const CombinedForm = ({
                                 onChange={handleChange}
                                 onAddNewOption={(_fieldName, value) =>
                                     addNewOptionPermanently('othersOptions', value)
+                                }
+                                onDeleteOption={(_fieldName, value) =>
+                                    deleteOptionPermanently('othersOptions', value)
                                 }
                                 placeholder="Select or type other information..."
                                 className="mt-1 block w-full border border-gray-300 bg-white font-semibold rounded-md  py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"

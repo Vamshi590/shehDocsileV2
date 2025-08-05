@@ -140,39 +140,27 @@ const Patients: React.FC = () => {
 
     fetchTodaysPatients()
   }, [])
-  // Function to handle adding a patient (used via PatientForm component)
-  // This function is passed to PatientForm component through props
-  // ESLint shows it as unused because it's passed as a prop rather than called directly
-  // @ts-ignore - used as prop
   const handleAddPatient = async (patient: Omit<Patient, 'id'>): Promise<void> => {
     try {
       setLoading(true)
-      // Use type assertion for API calls with more specific types
       const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
       const response = (await api.addPatient(patient)) as ApiResponse<Patient>
 
-      // Strict check for success and valid data
       if (response.success === true && response.data) {
         const addedPatient = response.data
-        setPatients([...patients, addedPatient])
+        setPatients([addedPatient, ...patients])
 
-        // Show success toast
         toast.success(response.message || 'Patient added successfully')
 
-        // Set the selected patient for receipt creation and show receipt form
         setSelectedPatient(addedPatient)
-        setShowReceiptForm(true)
       } else {
-        // Show error toast with the message from the backend
         toast.error(response.message || 'Failed to add patient')
-        // Close the form when there's an error
         setShowAddForm(false)
         setShowReceiptForm(false)
       }
     } catch (err) {
       console.error('Error adding patient:', err)
       toast.error('Failed to add patient')
-      // Close the form when there's an error
       setShowAddForm(false)
       setShowReceiptForm(false)
     } finally {
@@ -181,20 +169,14 @@ const Patients: React.FC = () => {
   }
 
   // Function to handle creating a receipt after patient creation (used internally)
-  // This function is passed to PatientForm component as onCreateReceipt prop
-  // ESLint shows it as unused because it's passed as a prop rather than called directly
-  // @ts-ignore - used as prop
   const handleCreateReceipt = (patient: Patient): void => {
     setSelectedPatient(patient)
     setShowReceiptForm(true)
   }
 
-  // Function to handle adding a receipt
   const handleAddReceipt = async (formData: Record<string, unknown>): Promise<void> => {
     try {
       setLoading(true)
-
-      // Create a complete receipt object with all necessary fields
       const receiptData = {
         ...formData,
         TYPE: 'RECEIPT',
@@ -206,16 +188,12 @@ const Patients: React.FC = () => {
         'CREATED BY':
           JSON.parse(localStorage.getItem('currentUser') || '{}')?.fullName || 'Unknown User'
       }
-
-      console.log('Adding receipt with data:', receiptData)
       const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
       const result = (await api.addPrescription(receiptData)) as {
         success: boolean
         data: Record<string, unknown> | null
         message: string
       }
-
-      console.log('Receipt creation result:', result)
 
       if (result.success && result.data) {
         // Create a receipt object from the successful response data
@@ -233,9 +211,6 @@ const Patients: React.FC = () => {
           ),
           ...formData
         }
-
-        // Set the created receipt and show print options
-        console.log('Setting last created receipt:', createdReceipt)
         setLastCreatedReceipt(createdReceipt)
         setShowPrintOptions(true)
 
@@ -603,7 +578,7 @@ const Patients: React.FC = () => {
       )}
 
       {showReceiptForm && selectedPatient && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">Create Receipt for {selectedPatient.name}</h2>
@@ -683,7 +658,7 @@ const Patients: React.FC = () => {
 
       {/* Print Options Dialog */}
       {showPrintOptions && lastCreatedReceipt && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">Receipt Created Successfully</h2>

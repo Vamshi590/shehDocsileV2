@@ -40,6 +40,7 @@ declare global {
       getLatestPrescriptionId: () => Promise<number>
       getPrescriptionsByPatientId: (patientId: string) => Promise<Prescription[]>
       getDropdownOptions: (fieldName: string) => Promise<string[]>
+      deleteDropdownOption: (fieldName: string, value: string) => Promise<void>
       addDropdownOption: (fieldName: string, value: string) => Promise<void>
       openPdfInWindow: (pdfBuffer: Uint8Array) => Promise<{ success: boolean; error?: string }>
       getLatestPatientId: () => Promise<number>

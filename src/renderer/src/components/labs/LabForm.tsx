@@ -30,12 +30,6 @@ declare global {
   interface Window {
     api: {
       // Lab-specific methods
-      getLabs: () => Promise<Lab[]>
-      addLab: (lab: Omit<Lab, 'id'>) => Promise<Lab>
-      updateLab: (lab: Lab) => Promise<Lab>
-      deleteLab: (id: string) => Promise<boolean>
-      searchLabs: (patientId: string) => Promise<Lab[]>
-      getTodaysLabs: () => Promise<Lab[]>
       getPatients: () => Promise<Patient[]>
       getPrescriptions: () => Promise<Prescription[]>
       addPrescription: (prescription: Omit<Prescription, 'id'>) => Promise<Prescription>
@@ -44,10 +38,18 @@ declare global {
       searchPrescriptions: (searchTerm: string) => Promise<Prescription[]>
       getTodaysPrescriptions: () => Promise<Prescription[]>
       getLatestPrescriptionId: () => Promise<number>
+      getPrescriptionsByPatientId: (patientId: string) => Promise<Prescription[]>
       getDropdownOptions: (fieldName: string) => Promise<string[]>
       addDropdownOption: (fieldName: string, value: string) => Promise<void>
       openPdfInWindow: (pdfBuffer: Uint8Array) => Promise<{ success: boolean; error?: string }>
       getLatestPatientId: () => Promise<number>
+      getLabs: () => Promise<Lab[]>
+      addLab: (lab: Omit<Lab, 'id'>) => Promise<Lab>
+      updateLab: (lab: Lab) => Promise<Lab>
+      deleteLab: (id: string) => Promise<boolean>
+      searchLabs: (patientId: string) => Promise<Lab[]>
+      getTodaysLabs: () => Promise<Lab[]>
+      getPrescriptionsByDate: (date: string) => Promise<Prescription[]>
     }
   }
 }

@@ -11,6 +11,7 @@ interface Patient {
   gender: string
   phone: string
   address: string
+  referredBy?: string
 }
 
 interface PatientTableProps {
@@ -149,7 +150,7 @@ const PatientTable = ({ patients, onEdit, onDelete }: PatientTableProps): React.
                 Name
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Guardian
+                Referred By
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Age
@@ -185,7 +186,7 @@ const PatientTable = ({ patients, onEdit, onDelete }: PatientTableProps): React.
                     {patient.name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {patient.guardian || '-'}
+                    {patient.referredBy || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {patient.age}

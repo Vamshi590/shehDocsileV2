@@ -1249,13 +1249,24 @@ const OperationForm: React.FC<OperationFormProps> = ({ patient, operation, onSav
             onCancel={() => setIsPrescriptionModalOpen(false)}
             prescriptionCount={1}
             selectedPatient={{
-              ['PATIENT ID']: patient.patientId,
-              ['GUARDIAN NAME']: patient.name,
-              DOB: '',
-              AGE: Number(patient.age) || 0,
-              GENDER: patient.gender || '',
-              ['PHONE NUMBER']: patient.phone || '',
-              ADDRESS: patient.address || ''
+              id: '', // Add a placeholder ID
+              patientId: patient.patientId,
+              name: patient.name,
+              age: patient.age?.toString() || '',
+              gender: patient.gender || '',
+              phone: patient.phone || '',
+              address: patient.address || '',
+              dateOfBirth: '',
+              guardianName: patient.name,
+              operationName: '',
+              operationDate: '',
+              department: '',
+              doctorNames: [],
+              onDutyDoctor: '',
+              referredBy: '',
+              packageAmount: 0,
+              packageInclusions: [],
+              date: new Date().toISOString().split('T')[0]
             }}
             initialData={prescriptionData || {}}
             patients={[]}

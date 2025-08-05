@@ -661,12 +661,6 @@ const LabTableWithReceipts: React.FC<LabTableWithReceiptsProps> = ({
                   scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                 >
-                  Guardian Name
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
                   DOB
                 </th>
                 <th
@@ -709,6 +703,12 @@ const LabTableWithReceipts: React.FC<LabTableWithReceiptsProps> = ({
                   scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                 >
+                  Discount %
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Amount Due
                 </th>
                 <th
@@ -737,9 +737,6 @@ const LabTableWithReceipts: React.FC<LabTableWithReceiptsProps> = ({
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {(lab['PATIENT NAME'] as React.ReactNode) || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {(lab['GUARDIAN NAME'] as React.ReactNode) || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {(lab.DOB as React.ReactNode) || '-'}
@@ -772,6 +769,17 @@ const LabTableWithReceipts: React.FC<LabTableWithReceiptsProps> = ({
                         : '-'
                       : lab['AMOUNT RECEIVED'] !== undefined && lab['AMOUNT RECEIVED'] !== null
                         ? `₹${lab['AMOUNT RECEIVED']}`
+                        : '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {lab.type === 'vannela'
+                      ? lab['VDISCOUNT PERCENTAGE'] !== undefined &&
+                        lab['VDISCOUNT PERCENTAGE'] !== null
+                        ? `${lab['VDISCOUNT PERCENTAGE']}%`
+                        : '-'
+                      : lab['DISCOUNT PERCENTAGE'] !== undefined &&
+                          lab['DISCOUNT PERCENTAGE'] !== null
+                        ? `${lab['DISCOUNT PERCENTAGE']}%`
                         : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

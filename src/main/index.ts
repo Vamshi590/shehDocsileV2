@@ -1230,6 +1230,7 @@ ipcMain.handle('updateInPatient', async (_, id, inpatientData) => {
         operationProcedure: id.inpatientData.operationProcedure,
         provisionDiagnosis: id.inpatientData.provisionDiagnosis,
         prescriptions: id.inpatientData.prescriptions,
+        followUpDate: id.inpatientData.followUpDate,
         updated_at: new Date().toISOString()
       })
       .eq('id', id.id)
@@ -1242,6 +1243,76 @@ ipcMain.handle('updateInPatient', async (_, id, inpatientData) => {
     return { success: true, data: data?.[0] || null }
   } catch (error) {
     console.error('Error updating in-patient:', error)
+    return {
+      success: false,
+      message: `Failed to update in-patient record: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }
+  }
+})
+
+// Update all fields of an in-patient record
+ipcMain.handle('updateInPatientAll', async (_, params) => {
+  try {
+    console.log('updateInPatientAll params:', params)
+
+    // Validate parameters
+    if (!params || !params.id) {
+      throw new Error('Missing required parameter: id')
+    }
+
+    const { id, inpatientData } = params
+    const rid = id.id
+    // Log the validated parameters
+    console.log('Processing full update for inpatient ID:', id)
+    console.log('Update data:', inpatientData)
+
+    // Create an update object with all fields from inpatientData
+    const updateData = {
+      // Patient information
+      name: id.inpatientData.name,
+      patientId: id.inpatientData.patientId,
+      age: id.inpatientData.age,
+      gender: id.inpatientData.gender,
+      guardianName: id.inpatientData.guardianName,
+      phone: id.inpatientData.phone,
+      address: id.inpatientData.address,
+      date: id.inpatientData.date,
+      admissionDate: id.inpatientData.admissionDate,
+
+      // Operation details
+      operationName: id.inpatientData.operationName,
+      operationDetails: id.inpatientData.operationDetails,
+      operationProcedure: id.inpatientData.operationProcedure,
+      provisionDiagnosis: id.inpatientData.provisionDiagnosis,
+      prescriptions: id.inpatientData.prescriptions,
+      followUpDate: id.inpatientData.followUpDate,
+
+      // Financial information
+      packageAmount: id.inpatientData.packageAmount,
+      packageInclusions: id.inpatientData.packageInclusions,
+      discount: id.inpatientData.discount,
+      netAmount: id.inpatientData.netAmount,
+      paymentRecords: id.inpatientData.paymentRecords,
+      totalReceivedAmount: id.inpatientData.totalReceivedAmount,
+      balanceAmount: id.inpatientData.balanceAmount,
+
+      // Metadata
+      updated_at: new Date().toISOString()
+    }
+
+    const { data, error } = await supabase
+      .from('inpatients')
+      .update(updateData)
+      .eq('id', rid)
+      .select()
+
+    if (error) {
+      throw new Error(`Supabase error: ${error.message}`)
+    }
+
+    return { success: true, data: data?.[0] || null }
+  } catch (error) {
+    console.error('Error updating in-patient (full update):', error)
     return {
       success: false,
       message: `Failed to update in-patient record: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -4522,6 +4593,52 @@ ipcMain.handle('addDropdownOption', async (_, fieldName: string, newValue: strin
     return { success: false, error: 'Failed to add option' }
   } catch (error) {
     console.error('Error adding dropdown option:', error)
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+})
+
+// Delete dropdown option
+ipcMain.handle('deleteDropdownOption', async (_, fieldName: string, optionValue: string) => {
+  try {
+    // Validate field name
+    const validFields = [
+      'doctorName',
+      'department',
+      'referredBy',
+      'medicineOptions',
+      'presentComplainOptions',
+      'previousHistoryOptions',
+      'othersOptions',
+      'others1Options',
+      'operationDetailsOptions',
+      'operationProcedureOptions',
+      'provisionDiagnosisOptions'
+    ]
+    if (!validFields.includes(fieldName)) {
+      return { success: false, error: 'Invalid field name' }
+    }
+
+    try {
+      // Delete the option from Supabase
+      const { error } = await supabase
+        .from('dropdown_options')
+        .delete()
+        .eq('field_name', fieldName)
+        .eq('option_value', optionValue)
+
+      if (error) {
+        console.warn('Supabase delete failed:', error.message)
+        return { success: false, error: error.message }
+      }
+
+      console.log(`Deleted '${optionValue}' from ${fieldName} options in Supabase`)
+      return { success: true, message: 'Option deleted successfully' }
+    } catch (supabaseError) {
+      console.warn('Supabase operation failed:', supabaseError)
+      return { success: false, error: 'Failed to delete option' }
+    }
+  } catch (error) {
+    console.error('Error deleting dropdown option:', error)
     return { success: false, error: error instanceof Error ? error.message : String(error) }
   }
 })

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Patients from './pages/Patients'
-import InPatients from './pages/InPatients'
 import Prescriptions from './pages/Prescriptions'
 import Reports from './pages/Reports'
 import Operations from './pages/Operations'
@@ -14,6 +13,7 @@ import Analytics from './pages/Analytics'
 import Staff from './pages/Staff'
 import Labs from './pages/Labs'
 import CertificateGenerator from './components/certificates/CertificateGenerator'
+import ActiveInPatients from './pages/ActiveInPatients'
 
 function App(): React.JSX.Element {
   const [route, setRoute] = useState<string>('/login')
@@ -45,8 +45,6 @@ function App(): React.JSX.Element {
         return <Dashboard />
       case '/patients':
         return <Patients />
-      case '/inpatients':
-        return <InPatients />
       case '/operations':
         return <Operations />
       case '/prescriptions':
@@ -69,6 +67,8 @@ function App(): React.JSX.Element {
         return <Labs />
       case '/certificates':
         return <CertificateGenerator />
+      case '/activeinpatients':
+        return <ActiveInPatients />
       default:
         return <Login />
     }

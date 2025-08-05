@@ -23,7 +23,8 @@ export interface InPatient {
   dateOfBirth: string
   guardianName: string
   operationName: string
-  operationDate?: string
+  admissionDate: string
+  operationDate: string
   operationDetails?: string
   operationProcedure?: string
   provisionDiagnosis?: string
@@ -36,10 +37,31 @@ export interface InPatient {
   date: string
   createdBy?: string
   prescriptions?: Array<Record<string, unknown>>
+  paymentRecords?: PaymentRecord[]
+  discount?: number
+  netAmount?: number
+  totalReceivedAmount?: number
+  balanceAmount?: number
+  followUpDate?: string
+}
+
+export interface PaymentRecord {
+  date: string
+  amountType: string
+  paymentMode: string
+  amount: number
 }
 
 export interface PackageInclusion {
   name: string
+  amount: number
+  subItems?: SubItem[]
+}
+
+export interface SubItem {
+  itemName: string
+  quantity: number
+  rate: number
   amount: number
 }
 
@@ -106,7 +128,10 @@ const InPatients: React.FC<{ showAddForm: boolean; setShowAddForm: (value: boole
   ): Promise<void> => {
     try {
       const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
-      const response = (await api.updateInPatient(id, inpatient)) as ApiResponse<InPatient>
+      const response = (await api.updateInPatient({
+        id,
+        inpatientData: inpatient
+      })) as ApiResponse<InPatient>
 
       if (response.success) {
         setInpatients((prevInpatients) =>
@@ -167,7 +192,7 @@ const InPatients: React.FC<{ showAddForm: boolean; setShowAddForm: (value: boole
 
       {/* Add In-Patient Form Modal */}
       {showAddForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">Add New In-Patient</h2>

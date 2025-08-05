@@ -54,6 +54,7 @@ declare global {
       getLatestPrescriptionId: () => Promise<number>
       getPrescriptionsByPatientId: (patientId: string) => Promise<Prescription[]>
       getDropdownOptions: (fieldName: string) => Promise<string[]>
+      deleteDropdownOption: (fieldName: string, value: string) => Promise<void>
       addDropdownOption: (fieldName: string, value: string) => Promise<void>
       openPdfInWindow: (pdfBuffer: Uint8Array) => Promise<{ success: boolean; error?: string }>
       getLatestPatientId: () => Promise<number>
@@ -106,7 +107,8 @@ const Prescriptions: React.FC = () => {
     operationDate: '',
     operationDetails: '',
     operationProcedure: '',
-    provisionDiagnosis: ''
+    provisionDiagnosis: '',
+    followUpDate: ''
   })
 
   // Reset prescription and eye reading flags when current receipt changes
@@ -830,7 +832,8 @@ const Prescriptions: React.FC = () => {
       operationDate: patient.operationDate || '',
       operationDetails: patient.operationDetails || '',
       operationProcedure: patient.operationProcedure || '',
-      provisionDiagnosis: patient.provisionDiagnosis || ''
+      provisionDiagnosis: patient.provisionDiagnosis || '',
+      followUpDate: patient.followUpDate || ''
     })
     setShowOperationDetailsModal(true)
   }
@@ -865,6 +868,7 @@ const Prescriptions: React.FC = () => {
         operationDetails: operationDetails.operationDetails,
         operationProcedure: operationDetails.operationProcedure,
         provisionDiagnosis: operationDetails.provisionDiagnosis,
+        followUpDate: operationDetails.followUpDate,
         // Make sure we're sending the prescriptions array to the backend
         prescriptions: prescriptions
       }
@@ -874,7 +878,10 @@ const Prescriptions: React.FC = () => {
       // Call the API to update the in-patient record
       const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
       // Ensure we're passing the parameters correctly
-      const response = await api.updateInPatient(selectedInPatient.id, inpatientData)
+      const response = await api.updateInPatientAll({
+        id: selectedInPatient.id,
+        inpatientData: inpatientData
+      })
 
       if (response && (response as StandardizedResponse<InPatient>).success) {
         toast.success('Operation details saved successfully')

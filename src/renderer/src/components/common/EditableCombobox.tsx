@@ -7,6 +7,7 @@ interface EditableComboboxProps {
   options: string[]
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void
   onAddNewOption?: (fieldName: string, newValue: string) => void
+  onDeleteOption?: (fieldName: string, optionValue: string) => void
   placeholder?: string
   required?: boolean
   className?: string
@@ -20,6 +21,7 @@ const EditableCombobox: React.FC<EditableComboboxProps> = ({
   options,
   onChange,
   onAddNewOption,
+  onDeleteOption,
   placeholder = 'Select or type...',
   required = false,
   className = '',
@@ -30,9 +32,12 @@ const EditableCombobox: React.FC<EditableComboboxProps> = ({
   const [filteredOptions, setFilteredOptions] = useState(options)
   const [blurTimeoutId, setBlurTimeoutId] = useState<NodeJS.Timeout | null>(null)
 
+  // Update input value when external value changes
   useEffect(() => {
-    setInputValue(value)
-  }, [value])
+    if (value !== inputValue) {
+      setInputValue(value)
+    }
+  }, [value, inputValue])
 
   useEffect(() => {
     if (inputValue) {
@@ -84,7 +89,15 @@ const EditableCombobox: React.FC<EditableComboboxProps> = ({
 
     // Always use the existing option's case if it exists
     setInputValue(existingOption)
+
+    // Immediately close the dropdown
     setIsOpen(false)
+
+    // Clear any existing blur timeout to prevent delayed actions
+    if (blurTimeoutId) {
+      clearTimeout(blurTimeoutId)
+      setBlurTimeoutId(null)
+    }
 
     // Only add if it's truly a new option (case-insensitive check)
     if (!optionExistsIgnoreCase(option, options) && onAddNewOption) {
@@ -96,10 +109,11 @@ const EditableCombobox: React.FC<EditableComboboxProps> = ({
     const syntheticEvent = {
       target: {
         name,
-        value: option
+        value: existingOption // Use the properly cased option
       }
     } as React.ChangeEvent<HTMLSelectElement>
 
+    // Trigger the onChange immediately
     onChange(syntheticEvent)
   }
 
@@ -121,7 +135,7 @@ const EditableCombobox: React.FC<EditableComboboxProps> = ({
   }
 
   const handleBlur = (): void => {
-    // Set a longer timeout to allow clicks on dropdown items
+    // Set a shorter timeout to allow clicks on dropdown items but not delay selection
     const timeoutId = setTimeout(() => {
       setIsOpen(false)
       // If user left the field with a new value, add it permanently (case-insensitive check)
@@ -130,7 +144,7 @@ const EditableCombobox: React.FC<EditableComboboxProps> = ({
         onAddNewOption(name, inputValue.toUpperCase())
       }
       setBlurTimeoutId(null)
-    }, 300) // Increased timeout to 300ms
+    }, 150) // Reduced timeout to 150ms for better responsiveness
     setBlurTimeoutId(timeoutId)
   }
 
@@ -165,16 +179,55 @@ const EditableCombobox: React.FC<EditableComboboxProps> = ({
             {filteredOptions.map((option, index) => (
               <div
                 key={index}
-                className="px-3 py-2 cursor-pointer hover:bg-gray-100 text-sm"
-                onMouseDown={() => handleOptionSelect(option)}
+                className="px-3 py-2 cursor-pointer hover:bg-gray-100 text-sm flex justify-between items-center"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleOptionSelect(option)
+                }}
+                onMouseDown={(e) => {
+                  e.preventDefault() // Prevent blur event from firing before click
+                }}
               >
-                {option}
+                <div className="flex-grow">{option}</div>
+                {onDeleteOption && (
+                  <button
+                    type="button"
+                    className="text-red-500 hover:text-red-700 ml-2 p-1"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDeleteOption(name, option)
+                    }}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                )}
               </div>
             ))}
             {inputValue && !optionExistsIgnoreCase(inputValue, options) && (
               <div
                 className="px-3 py-2 cursor-pointer hover:bg-blue-100 text-sm text-blue-600 border-t border-gray-200"
-                onMouseDown={() => handleOptionSelect(inputValue)}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleOptionSelect(inputValue)
+                }}
+                onMouseDown={(e) => {
+                  e.preventDefault() // Prevent blur event from firing before click
+                }}
               >
                 + Add &quot;{inputValue}&quot;
               </div>

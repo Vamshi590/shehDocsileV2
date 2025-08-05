@@ -481,16 +481,20 @@ const PatientForm: React.FC<PatientFormProps> = ({
           : ({ ...submissionData, id: submissionData.id || String(Date.now()) } as Patient)
 
       // Call onCreateReceipt if provided (for new patients)
+      // This is the ONLY place where we should trigger receipt creation for new patients
       if (onCreateReceipt && patientData && !isExistingPatientMode) {
         onCreateReceipt(patientData)
       }
 
-      // Show success message
-      toast.success(
-        isExistingPatientMode && searchedPatient
-          ? `Patient ${patientData.name} updated successfully`
-          : `Patient ${patientData.name} added successfully`
-      )
+      // Only show success message for new patients or when in existing patient mode
+      // For updates (when initialValues is provided), we'll let the parent component handle the success message
+      if (!initialValues) {
+        toast.success(
+          isExistingPatientMode && searchedPatient
+            ? `Patient ${patientData.name} updated successfully`
+            : `Patient ${patientData.name} added successfully`
+        )
+      }
 
       // Reset form if not in existing patient mode or not editing
       if (!isExistingPatientMode && !initialValues) {

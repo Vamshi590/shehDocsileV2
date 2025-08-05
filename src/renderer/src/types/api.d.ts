@@ -88,6 +88,10 @@ interface API {
     fieldName: string,
     newValue: string
   ) => Promise<{ success: boolean; message?: string; error?: string }>
+  deleteDropdownOption: (
+    fieldName: string,
+    optionValue: string
+  ) => Promise<{ success: boolean; message?: string; error?: string }>
   getDropdownOptions: (
     fieldName: string
   ) => Promise<{ success: boolean; options?: string[]; error?: string }>

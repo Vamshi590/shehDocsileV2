@@ -12,6 +12,7 @@ type OperationDetailsFormData = {
   operationDetails: string
   operationProcedure: string
   provisionDiagnosis: string
+  followUpDate: string
 }
 
 interface OperationDetailsModalProps {
@@ -36,6 +37,8 @@ const OperationDetailsModal: React.FC<OperationDetailsModalProps> = ({
   const [formData, setFormData] = useState<Record<string, unknown>>({})
   const [visiblePrescriptions, setVisiblePrescriptions] = useState(1)
   const [medicineOptionss] = useState<string[]>(medicineOptions)
+
+  console.log(operationDetails)
 
   // Reset form data when modal opens/closes or when selected patient changes
   useEffect(() => {
@@ -218,19 +221,18 @@ const OperationDetailsModal: React.FC<OperationDetailsModalProps> = ({
       // Call the original onSave function to save everything
       await onSave()
 
-      // If we have prescriptions, update them separately
-      if (prescriptionsArray.length > 0) {
-        // Merge with existing prescriptions
-        const existingPrescriptions = selectedInPatient.prescriptions || []
-        const mergedPrescriptions = [...existingPrescriptions, ...prescriptionsArray]
+      // If we have prescriptions and they've been modified, update them separately
+      if (prescriptionsArray.length > 0 && showDischargePrescription) {
+        // Instead of merging, replace the existing prescriptions with the new ones
+        // This prevents duplication when editing
 
         // Update prescriptions in the database
         const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
         await api.updateInPatient(selectedInPatient.id, {
-          prescriptions: mergedPrescriptions
+          prescriptions: prescriptionsArray
         })
 
-        toast.success('Prescription added to operation details')
+        toast.success('Prescription updated successfully')
       }
 
       // Reset prescription form
@@ -262,37 +264,40 @@ const OperationDetailsModal: React.FC<OperationDetailsModalProps> = ({
           )}
 
           <div className="space-y-4">
-            <div>
-              <label
-                htmlFor="operationName"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Operation Name
-              </label>
-              <input
-                type="text"
-                id="operationName"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter operation name"
-                value={operationDetails.operationName}
-                onChange={onOperationDetailsChange}
-              />
+            <div className="flex space-x-4 w-full">
+              <div className="w-1/2">
+                <label
+                  htmlFor="operationName"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Operation Name
+                </label>
+                <input
+                  type="text"
+                  id="operationName"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter operation name"
+                  value={operationDetails.operationName}
+                  onChange={onOperationDetailsChange}
+                />
+              </div>
+              <div className="w-1/2">
+                <label
+                  htmlFor="operationDate"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Operation Date
+                </label>
+                <input
+                  type="date"
+                  id="operationDate"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={operationDetails.operationDate.split('T')[0]}
+                  onChange={onOperationDetailsChange}
+                />
+              </div>
             </div>
-            <div>
-              <label
-                htmlFor="operationDate"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Operation Date
-              </label>
-              <input
-                type="date"
-                id="operationDate"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={operationDetails.operationDate}
-                onChange={onOperationDetailsChange}
-              />
-            </div>
+
             <div>
               <label
                 htmlFor="operationDetails"
@@ -340,6 +345,21 @@ const OperationDetailsModal: React.FC<OperationDetailsModalProps> = ({
                 value={operationDetails.provisionDiagnosis}
                 onChange={onOperationDetailsChange}
               ></textarea>
+            </div>
+            <div>
+              <label
+                htmlFor="followUpDate"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Follow-up Date
+              </label>
+              <input
+                type="date"
+                id="followUpDate"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={operationDetails.followUpDate || ''}
+                onChange={onOperationDetailsChange}
+              />
             </div>
 
             {/* Render Discharge Prescription Form when showDischargePrescription is true */}

@@ -689,12 +689,10 @@ const ReceiptViewer: React.FC<ReceiptViewerProps> = ({
               patientName={String(report.patientName || report['PATIENT NAME'] || '')}
               doctorName={String(report.doctorName || report['DOCTOR NAME'] || '')}
               labData={report}
-              discountPercentage={Number(
-                report['VDISCOUNT PERCENT'] || report['DISCOUNT PERCENT'] || 0
-              )}
-              amountReceived={Number(report['VAMOUNT RECEIVED'] || report['AMOUNT RECEIVED'] || 0)}
-              amountDue={Number(report['VAMOUNT DUE'] || report['AMOUNT DUE'] || 0)}
-              totalAmount={Number(report['VTOTAL AMOUNT'] || report['TOTAL AMOUNT'] || 0)}
+              discountPercentage={Number(report['VDISCOUNT PERCENT'] || 0)}
+              amountReceived={Number(report['VAMOUNT RECEIVED'] || 0)}
+              amountDue={Number(report['VAMOUNT DUE'] || 0)}
+              totalAmount={Number(report['VTOTAL AMOUNT'] || 0)}
             />
           </div>
         )
