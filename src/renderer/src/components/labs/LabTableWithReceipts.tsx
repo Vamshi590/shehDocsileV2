@@ -59,6 +59,7 @@ const LabTableWithReceipts: React.FC<LabTableWithReceiptsProps> = ({
     setReportReceiptTypes([])
   }
 
+  console.log('labs', labs)
   // Handle receipt type selection
   const handleSelectReceiptType = (type: string): void => {
     // Exit report mode if we're selecting a specific receipt type
@@ -629,7 +630,30 @@ const LabTableWithReceipts: React.FC<LabTableWithReceiptsProps> = ({
           <p className="text-gray-500">No lab records found</p>
         </div>
       ) : (
-        <div className="shadow overflow-x-auto border-b border-gray-200 sm:rounded-lg">
+        <div
+          className="overflow-x-auto border border-gray-200 rounded-lg"
+          style={{
+            overflowX: 'auto',
+            scrollbarWidth: 'thin',
+            scrollbarColor: '#cbd5e0 #f9fafb'
+          }}
+        >
+          <style>
+            {`
+          /* Custom scrollbar for WebKit browsers (Chrome, Safari) */
+          div::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+          }
+          div::-webkit-scrollbar-track {
+            background: #f9fafb;
+          }
+          div::-webkit-scrollbar-thumb {
+            background-color: #cbd5e0;
+            border-radius: 6px;
+          }
+          `}
+          </style>
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -715,6 +739,30 @@ const LabTableWithReceipts: React.FC<LabTableWithReceiptsProps> = ({
                   scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                 >
+                  VTOTAL AMOUNT
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  VDISCOUNT PERCENTAGE
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  VAMOUNT RECEIVED
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  VAMOUNT DUE
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Actions
                 </th>
               </tr>
@@ -790,6 +838,18 @@ const LabTableWithReceipts: React.FC<LabTableWithReceiptsProps> = ({
                       : lab['AMOUNT DUE'] !== undefined && lab['AMOUNT DUE'] !== null
                         ? `₹${lab['AMOUNT DUE']}`
                         : '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {`₹${lab['VTOTAL AMOUNT'] || 0}`}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {`${lab['VDISCOUNT PERCENTAGE'] || 0}%`}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {`₹${lab['VAMOUNT RECEIVED'] || 0}`}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {`₹${lab['VAMOUNT DUE'] || 0}`}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">

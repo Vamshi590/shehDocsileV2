@@ -515,7 +515,8 @@ const CombinedForm = ({
         // Handle special add options for near SPH fields
         if ((name === 'SR-RE-N-SPH' || name === 'SR-LE-N-SPH') && value.startsWith('add ')) {
             // Extract the number to add (1, 2, or 3)
-            const addValue = parseInt(value.split(' ')[1]);
+            const addValueStr = value.replace('add ', '');
+            const addValue = parseFloat(addValueStr);
             
             // Get the corresponding distance SPH value
             const distanceFieldName = name === 'SR-RE-N-SPH' ? 'SR-RE-D-SPH' : 'SR-LE-D-SPH';

@@ -1264,6 +1264,7 @@ const OperationForm: React.FC<OperationFormProps> = ({ patient, operation, onSav
               doctorNames: [],
               onDutyDoctor: '',
               referredBy: '',
+              admissionDate: '',
               packageAmount: 0,
               packageInclusions: [],
               date: new Date().toISOString().split('T')[0]

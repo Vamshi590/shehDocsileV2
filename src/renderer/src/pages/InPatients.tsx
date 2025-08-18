@@ -43,6 +43,7 @@ export interface InPatient {
   totalReceivedAmount?: number
   balanceAmount?: number
   followUpDate?: string
+  dischargeDate?: string
 }
 
 export interface PaymentRecord {
@@ -128,7 +129,7 @@ const InPatients: React.FC<{ showAddForm: boolean; setShowAddForm: (value: boole
   ): Promise<void> => {
     try {
       const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
-      const response = (await api.updateInPatient({
+      const response = (await api.updateInPatientAll({
         id,
         inpatientData: inpatient
       })) as ApiResponse<InPatient>

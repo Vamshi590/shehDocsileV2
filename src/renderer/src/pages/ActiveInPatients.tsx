@@ -44,18 +44,15 @@ const ActiveInPatients: React.FC = () => {
   const handleDischargeInPatient = async (inpatient: InPatient): Promise<void> => {
     try {
       // Update the in-patient with discharge date and time
+      // The dischargeDate field is already set by the DischargeModal component
       const updatedInPatient = {
-        ...inpatient,
-        operationDate: new Date().toISOString().split('T')[0],
-        operationTime: new Date().toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        })
+        id: inpatient.id,
+        inpatientData: inpatient
+        // dischargeDate is already included from the modal
       }
 
       const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
-      const response = (await api.updateInPatient(updatedInPatient)) as ApiResponse<InPatient>
+      const response = (await api.updateInPatientAll(updatedInPatient)) as ApiResponse<InPatient>
 
       if (response.success) {
         toast.success('In-patient discharged successfully')

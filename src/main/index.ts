@@ -1278,7 +1278,9 @@ ipcMain.handle('updateInPatientAll', async (_, params) => {
       address: id.inpatientData.address,
       date: id.inpatientData.date,
       admissionDate: id.inpatientData.admissionDate,
-
+      doctorNames: id.inpatientData.doctorNames,
+      onDutyDoctor: id.inpatientData.onDutyDoctor,
+      referredBy: id.inpatientData.referredBy,
       // Operation details
       operationName: id.inpatientData.operationName,
       operationDetails: id.inpatientData.operationDetails,
@@ -4009,94 +4011,129 @@ async function generateAnalyticsData(
         .slice(0, 5)
     }
 
-    // Get operations data - try Supabase first, fallback to Excel
-    let operations: Array<{
-      patientId: string
-      patientName: string
-      dateOfAdmit: string
-      timeOfAdmit: string
-      dateOfOperation: string
-      timeOfOperation: string
-      dateOfDischarge: string
-      timeOfDischarge: string
-      operationDetails: string
-      operationProcedure: string
-      provisionDiagnosis: string
-      reviewOn: string
-      operatedBy: string
-      totalAmount: number
+    // Get in-patient data from Supabase
+    let inpatients: Array<{
       id: string
+      patientId: string
+      name: string
+      age: string
+      gender: string
+      phone: string
+      address: string
+      dateOfBirth: string
+      guardianName: string
+      operationName: string
+      admissionDate: string
+      operationDate: string
+      operationDetails?: string
+      operationProcedure?: string
+      provisionDiagnosis?: string
+      department: string
+      doctorNames: string[]
+      onDutyDoctor: string
+      referredBy: string
+      packageAmount: number
+      date: string
+      netAmount?: number
+      totalReceivedAmount?: number
+      balanceAmount?: number
+      followUpDate?: string
+      dischargeDate?: string
       [key: string]: unknown
     }> = []
 
     try {
-      // Try to get operations from Supabase first
-      const { data: supabaseOperations, error } = await supabase
-        .from('operations')
+      // Get in-patients data from Supabase
+      const { data: supabaseInpatients, error } = await supabase
+        .from('inpatients')
         .select('*')
-        .gte('dateOfAdmit', start.toISOString().split('T')[0])
-        .lte('dateOfAdmit', end.toISOString().split('T')[0])
-        .order('dateOfAdmit', { ascending: false })
+        .gte('date', start.toISOString().split('T')[0])
+        .lte('date', end.toISOString().split('T')[0])
+        .order('date', { ascending: false })
 
       if (error) {
         throw new Error(`Supabase error: ${error.message}`)
       }
 
-      if (supabaseOperations && supabaseOperations.length > 0) {
-        operations = supabaseOperations as Array<{
-          patientId: string
-          patientName: string
-          dateOfAdmit: string
-          timeOfAdmit: string
-          dateOfOperation: string
-          timeOfOperation: string
-          dateOfDischarge: string
-          timeOfDischarge: string
-          operationDetails: string
-          operationProcedure: string
-          provisionDiagnosis: string
-          reviewOn: string
-          operatedBy: string
-          totalAmount: number
+      if (supabaseInpatients && supabaseInpatients.length > 0) {
+        inpatients = supabaseInpatients as Array<{
           id: string
+          patientId: string
+          name: string
+          age: string
+          gender: string
+          phone: string
+          address: string
+          dateOfBirth: string
+          guardianName: string
+          operationName: string
+          admissionDate: string
+          operationDate: string
+          operationDetails?: string
+          operationProcedure?: string
+          provisionDiagnosis?: string
+          department: string
+          doctorNames: string[]
+          onDutyDoctor: string
+          referredBy: string
+          packageAmount: number
+          date: string
+          netAmount?: number
+          totalReceivedAmount?: number
+          balanceAmount?: number
+          followUpDate?: string
+          dischargeDate?: string
           [key: string]: unknown
         }>
-        console.log('Operations data fetched from Supabase for analytics')
+        console.log('In-patients data fetched from Supabase for analytics')
       } else {
-        throw new Error('No operations data from Supabase')
+        throw new Error('No in-patients data from Supabase')
       }
     } catch (supabaseError) {
-      console.error('Error getting operations from Supabase for analytics:', supabaseError)
+      console.error('Error getting in-patients from Supabase for analytics:', supabaseError)
     }
 
-    if (operations.length > 0) {
-      // Filter operations by date range
-      const filteredOperations = operations.filter((operation) => {
-        if (!operation.dateOfAdmit) return false
-        const operationDate = new Date(operation.dateOfAdmit.toString())
-        return operationDate >= start && operationDate <= end
+    if (inpatients.length > 0) {
+      // Filter inpatients by date range
+      const filteredInpatients = inpatients.filter((inpatient) => {
+        if (!inpatient.date) return false
+        const admitDate = new Date(inpatient.date.toString())
+        return admitDate >= start && admitDate <= end
       })
       const today = new Date().toLocaleDateString()
-      // Calculate revenue from operations (estimated)
-      analyticsData.revenueStats.operations = filteredOperations.reduce(
-        (total, operation) => total + (Number(operation.totalAmount) || 0),
+      // Calculate revenue from inpatients
+      analyticsData.revenueStats.operations = filteredInpatients.reduce(
+        (total, inpatient) => total + (Number(inpatient.totalReceivedAmount) || 0),
         0
       )
       analyticsData.revenueStats.total += analyticsData.revenueStats.operations
       // Calculate treatment statistics
-      analyticsData.patientTreatmentStats.completedTreatments = filteredOperations.length
+      analyticsData.patientTreatmentStats.completedTreatments = filteredInpatients.filter(
+        (inpatient) =>
+          inpatient.operationDetails && inpatient.provisionDiagnosis && inpatient.operationProcedure
+      ).length
       analyticsData.patientTreatmentStats.ongoingTreatments = Math.round(
-        filteredOperations.filter((operations) => !operations.dateOfDischarge).length
+        filteredInpatients.filter((inpatient) => !inpatient.dischargeDate).length
       )
       analyticsData.patientTreatmentStats.followUps = Math.round(
-        filteredOperations.filter((operations) => operations.reviewOn > today).length
+        filteredInpatients.filter(
+          (inpatient) =>
+            inpatient.followUpDate && new Date(inpatient.followUpDate) > new Date(today)
+        ).length
       )
 
-      // Calculate peak hours (simulated data)
+      // Calculate peak hours based on admission times or use simulated data if time not available
       const hourCounts = new Array(24).fill(0)
-      filteredOperations.forEach(() => {
-        // Simulate peak hours - more operations between 9 AM and 5 PM
-        const hour = Math.floor(Math.random() * 8) + 9
+      filteredInpatients.forEach((inpatient) => {
+        // Try to extract time from admissionDate if available, otherwise simulate
+        let hour: number
+        if (inpatient.admissionDate && inpatient.admissionDate.includes('T')) {
+          const admitTime = new Date(inpatient.admissionDate)
+          hour = admitTime.getHours()
+        } else {
+          // Simulate peak hours - more operations between 9 AM and 5 PM
+          hour = Math.floor(Math.random() * 8) + 9
+        }
         hourCounts[hour]++
       })
 
@@ -4106,8 +4143,16 @@ async function generateAnalyticsData(
         .sort((a, b) => b.count - a.count)
         .slice(0, 5)
 
-      // Calculate treatment success rate (simulated)
-      analyticsData.eyeConditionStats.treatmentSuccess = Math.round(90 + Math.random() * 10) // 90-100%
+      // Calculate treatment success rate based on completed operations vs total
+      const completedOps = filteredInpatients.filter(
+        (inpatient) => inpatient.operationDetails && inpatient.operationProcedure
+      ).length
+      const totalOps = filteredInpatients.length
+
+      analyticsData.eyeConditionStats.treatmentSuccess =
+        totalOps > 0
+          ? Math.round((completedOps / totalOps) * 100)
+          : Math.round(90 + Math.random() * 10) // Fallback to 90-100% if no data
     }
 
     // Get lab records - try Supabase first, fallback to Excel
@@ -4287,13 +4332,13 @@ async function generateAnalyticsData(
       }
     })
 
-    // Add operations revenue to the revenue by date using already fetched data
-    operations.forEach((operation) => {
-      if (operation.dateOfAdmit) {
-        const operationDate = new Date(operation.dateOfAdmit.toString())
-        if (operationDate >= start && operationDate <= end) {
-          const dateString = operationDate.toISOString().split('T')[0]
-          const amount = Number(operation.totalAmount) || 0
+    // Add inpatient revenue to the revenue by date using already fetched data
+    inpatients.forEach((inpatient) => {
+      if (inpatient.date) {
+        const admitDate = new Date(inpatient.date.toString())
+        if (admitDate >= start && admitDate <= end) {
+          const dateString = admitDate.toISOString().split('T')[0]
+          const amount = Number(inpatient.netAmount) || 0
           const currentRevenue = revenueByDate.get(dateString) || 0
           revenueByDate.set(dateString, currentRevenue + amount)
         }
@@ -4813,6 +4858,39 @@ ipcMain.handle('getTodaysLabs', async () => {
     }
   }
 })
+
+// Get labs by date
+ipcMain.handle('getLabsByDate', async (_, date) => {
+  try {
+    const { data: labs, error } = await supabase.from('labs').select('*').eq('DATE', date)
+
+    if (!error && labs) {
+      console.log(`Labs for date ${date} fetched from Supabase successfully`)
+      return {
+        success: true,
+        data: labs,
+        error: null,
+        statusCode: 200
+      }
+    } else {
+      console.log(`Labs for date ${date} fetched from Supabase failed`, error)
+      return {
+        success: false,
+        data: [],
+        error: error?.message || `Failed to fetch labs for date ${date}`,
+        statusCode: 400
+      }
+    }
+  } catch (error) {
+    console.error(`Error getting labs for date ${date}:`, error)
+    return {
+      success: false,
+      data: [],
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      statusCode: 500
+    }
+  }
+})
 // Add a new lab
 ipcMain.handle('addLab', async (_, labData: Omit<Lab, 'id'>) => {
   try {
@@ -4856,6 +4934,8 @@ ipcMain.handle('addLab', async (_, labData: Omit<Lab, 'id'>) => {
 ipcMain.handle('updateLab', async (_, labData: Lab) => {
   try {
     const { id } = labData
+
+    console.log('Lab', labData)
 
     const { data, error } = await supabase.from('labs').update(labData).eq('id', id).select()
 

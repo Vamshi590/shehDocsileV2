@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { InPatient } from '../../pages/InPatients'
 import InPatientReceiptViewer from '../reports/InPatientReceiptViewer'
 import InPatientEditModal from './InPatientEditModal'
+import DischargeModal from './DischargeModal'
 
 // Define Discharge type to match InPatient structure for compatibility with ReceiptViewer
 type Discharge = InPatient
@@ -25,6 +26,8 @@ const ActiveInPatientTableWithReceipts: React.FC<ActiveInPatientTableWithReceipt
   const [relatedDischarge, setRelatedDischarge] = useState<Discharge | null>(null)
   const [selectedReceiptType, setSelectedReceiptType] = useState<string | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false)
+  const [isDischargeModalOpen, setIsDischargeModalOpen] = useState<boolean>(false)
+  const [dischargePatient, setDischargePatient] = useState<InPatient | null>(null)
 
   // Refs for both receipts
   const dischargeSummaryRef = useRef<HTMLDivElement>(null)
@@ -118,52 +121,62 @@ const ActiveInPatientTableWithReceipts: React.FC<ActiveInPatientTableWithReceipt
       return
     }
     try {
-      const receiptEl = operationReceiptRef.current
-      if (!receiptEl) {
-        toast.error('Receipt element not found')
-        return
-      }
-      // Clone and clean oklch colors
-      const clone = receiptEl.cloneNode(true) as HTMLElement
-      stripOKLCH(clone)
-      clone.style.width = '794px'
-      clone.style.height = '1123px'
-      clone.style.backgroundColor = '#ffffff'
-      document.body.appendChild(clone)
-
-      const canvas = await html2canvas(clone, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true
-      })
-      document.body.removeChild(clone)
-      const imgData = canvas.toDataURL('image/png')
-
       // Create PDF with A4 dimensions (points)
       const pdfDoc = await PDFDocument.create()
       const PAGE_WIDTH = 595.28
       const PAGE_HEIGHT = 841.89
-      const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
-      const pngImage = await pdfDoc.embedPng(imgData)
 
-      // Scale the image so it always fits inside the page while preserving aspect ratio
-      const imgWidth = pngImage.width
-      const imgHeight = pngImage.height
-      const scale = Math.min(PAGE_WIDTH / imgWidth, PAGE_HEIGHT / imgHeight)
-      const drawWidth = imgWidth * scale
-      const drawHeight = imgHeight * scale
-      const x = (PAGE_WIDTH - drawWidth) / 2
-      const y = (PAGE_HEIGHT - drawHeight) / 2
+      // Handle different receipt types
+      if (selectedReceiptType === 'cash' || selectedReceiptType === 'both') {
+        // Add cash receipt as first page
+        const receiptEl = operationReceiptRef.current
+        if (!receiptEl) {
+          toast.error('Cash receipt element not found')
+          return
+        }
 
-      page.drawImage(pngImage, {
-        x,
-        y,
-        width: drawWidth,
-        height: drawHeight
-      })
+        // Clone and clean oklch colors
+        const clone = receiptEl.cloneNode(true) as HTMLElement
+        stripOKLCH(clone)
+        clone.style.width = '794px'
+        clone.style.height = '1123px'
+        clone.style.backgroundColor = '#ffffff'
+        document.body.appendChild(clone)
 
-      // If discharge summary exists, add it as second page
-      if (dischargeSummaryRef.current && relatedDischarge) {
+        const canvas = await html2canvas(clone, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true
+        })
+        document.body.removeChild(clone)
+        const imgData = canvas.toDataURL('image/png')
+
+        const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
+        const pngImage = await pdfDoc.embedPng(imgData)
+
+        // Scale the image so it always fits inside the page while preserving aspect ratio
+        const imgWidth = pngImage.width
+        const imgHeight = pngImage.height
+        const scale = Math.min(PAGE_WIDTH / imgWidth, PAGE_HEIGHT / imgHeight)
+        const drawWidth = imgWidth * scale
+        const drawHeight = imgHeight * scale
+        const x = (PAGE_WIDTH - drawWidth) / 2
+        const y = (PAGE_HEIGHT - drawHeight) / 2
+
+        page.drawImage(pngImage, {
+          x,
+          y,
+          width: drawWidth,
+          height: drawHeight
+        })
+      }
+
+      // Add discharge summary if selected or if 'both' is selected
+      if (
+        (selectedReceiptType === 'discharge' || selectedReceiptType === 'both') &&
+        dischargeSummaryRef.current &&
+        relatedDischarge
+      ) {
         const dischargeSummaryEl = dischargeSummaryRef.current
         const dischargeSummaryClone = dischargeSummaryEl.cloneNode(true) as HTMLElement
         stripOKLCH(dischargeSummaryClone)
@@ -377,20 +390,23 @@ const ActiveInPatientTableWithReceipts: React.FC<ActiveInPatientTableWithReceipt
     }
   }
 
-  // Handle discharge button click
+  // Handle discharge button click - opens the discharge modal
   const handleDischarge = (inpatient: InPatient): void => {
+    setDischargePatient(inpatient)
+    setIsDischargeModalOpen(true)
+  }
+
+  // Handle discharge confirmation from modal
+  const handleDischargeConfirm = (inpatient: InPatient, dischargeDate: string): void => {
     if (onDischargeInPatient) {
-      // Mark the patient as discharged by setting the operation date
+      // Mark the patient as discharged by setting the discharge date
       const updatedInPatient = {
         ...inpatient,
-        operationDate: new Date().toISOString().split('T')[0],
-        operationDetails: new Date().toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        })
+        dischargeDate: dischargeDate
       }
       onDischargeInPatient(updatedInPatient)
+      setIsDischargeModalOpen(false)
+      setDischargePatient(null)
     }
   }
 
@@ -583,6 +599,9 @@ const ActiveInPatientTableWithReceipts: React.FC<ActiveInPatientTableWithReceipt
                 Diagnosis
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Net Amount
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -629,6 +648,23 @@ const ActiveInPatientTableWithReceipts: React.FC<ActiveInPatientTableWithReceipt
                   {inpatient.provisionDiagnosis && inpatient.provisionDiagnosis.length > 20
                     ? `${inpatient.provisionDiagnosis.substring(0, 20)}...`
                     : inpatient.provisionDiagnosis || '-'}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                  {inpatient.dischargeDate ? (
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                      Discharged
+                    </span>
+                  ) : inpatient.operationDetails &&
+                    inpatient.provisionDiagnosis &&
+                    inpatient.operationProcedure ? (
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                      Completed
+                    </span>
+                  ) : (
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                      Ready for Operation
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                   ₹
@@ -678,6 +714,18 @@ const ActiveInPatientTableWithReceipts: React.FC<ActiveInPatientTableWithReceipt
           inpatient={selectedInPatient}
           onUpdate={handleUpdateInPatient}
           onClose={() => setIsEditModalOpen(false)}
+        />
+      )}
+
+      {/* Discharge Modal */}
+      {isDischargeModalOpen && dischargePatient && (
+        <DischargeModal
+          inpatient={dischargePatient}
+          onConfirm={handleDischargeConfirm}
+          onClose={() => {
+            setIsDischargeModalOpen(false)
+            setDischargePatient(null)
+          }}
         />
       )}
     </div>

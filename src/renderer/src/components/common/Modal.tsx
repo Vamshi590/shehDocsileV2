@@ -76,7 +76,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 modal-backdrop">
       <div
         ref={modalRef}
-        className={`bg-white rounded-lg shadow-xl w-full ${sizeClasses[size]} mx-4 my-8`}
+        className={`bg-white rounded-lg shadow-xl w-full min-w-[80vw] ${sizeClasses[size]} mx-4 my-8`}
       >
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="text-lg font-medium text-gray-900">{title}</h3>

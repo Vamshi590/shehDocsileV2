@@ -3,6 +3,8 @@
 import React from 'react'
 import eyeimage from '../../assets/eye_image.jpg'
 import nabhimage from '../../assets/nabh_accredited.jpg'
+import { toZonedTime } from 'date-fns-tz'
+import { format } from 'date-fns'
 
 interface PrescriptionItem {
   medicine: string
@@ -209,33 +211,46 @@ export default function InPatientDischargeSummary({
             {/* Patient ID */}
             <div>
               <div className="font-bold">DATE OF ADMISSION</div>
-              <div>{patientData.admissionDate}</div>
+              <div>
+                {patientData.admissionDate &&
+                  format(
+                    toZonedTime(patientData.admissionDate, 'Asia/Kolkata'),
+                    'dd-MM-yyyy hh:mm a'
+                  )}
+              </div>
             </div>
             {/* Date */}
             <div>
               <div className="font-bold">DATE OF DISCHARGE</div>
-              <div>{dateOfDischarge}</div>
+              <div>
+                {(dateOfDischarge &&
+                  format(toZonedTime(dateOfDischarge, 'Asia/Kolkata'), 'dd-MM-yyyy hh:mm a')) ||
+                  format(toZonedTime(new Date(), 'Asia/Kolkata'), 'dd-MM-yyyy hh:mm a')}
+              </div>
             </div>
             {/* Patient Name */}
             <div>
               <div className="font-bold">DATE OF OPERATION</div>
-              <div>{operationDate}</div>
+              <div>
+                {operationDate &&
+                  format(toZonedTime(operationDate, 'Asia/Kolkata'), 'dd-MM-yyyy hh:mm a')}
+              </div>
             </div>
           </div>
 
-          <div className="text-[11px] flex justify-between gap-x-4 gap-y-2">
+          <div className="text-[11px] flex flex-col justify-between gap-x-4 gap-y-2">
             {/* Gender */}
-            <div>
+            <div className="flex space-x-2">
               <div className="font-bold">DIAGNOSIS</div>
               <div>{provisionDiagnosis}</div>
             </div>
             {/* Guardian Name */}
-            <div>
+            <div className="flex space-x-2">
               <div className="font-bold">OPERATION PROCEDURE</div>
               <div>{operationProcedure}</div>
             </div>
             {/* Age */}
-            <div>
+            <div className="flex space-x-2">
               <div className="font-bold">OPERATION DETAILS</div>
               <div>{operationDetails}</div>
             </div>
