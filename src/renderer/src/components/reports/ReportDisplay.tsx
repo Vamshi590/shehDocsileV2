@@ -199,10 +199,9 @@ const ReportDisplay: React.FC<ReportDisplayProps> = ({ reports }) => {
                           patientName={patientName}
                           patientPhone={phoneNumber}
                           patientId={patientId}
-                          onSelectReceiptType={(type, operationData) => {
+                          onSelectReceiptType={(type) => {
                             setIsReportMode(false) // Exit report mode when selecting a single receipt
                             setSelectedReceiptType(type)
-                            setSelectedOperation(operationData)
                           }}
                           onGenerateReport={(types) => {
                             // Set report mode and store selected receipt types
@@ -210,7 +209,6 @@ const ReportDisplay: React.FC<ReportDisplayProps> = ({ reports }) => {
                             setReportReceiptTypes(types)
                             // Clear single receipt selection
                             setSelectedReceiptType('')
-                            setSelectedOperation(undefined)
                           }}
                         />
 

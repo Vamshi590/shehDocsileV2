@@ -1,130 +1,45 @@
 import React, { useState } from 'react'
-import { toast } from 'sonner'
 
-// Define standardized API response type
-interface StandardizedResponse<T> {
-  success: boolean
-  data: T
-  message?: string
-}
-
-// Define Operation type
-// Define Prescription type
-interface Prescription {
+// Define common interface for follow-up items
+export interface FollowUpItem {
   id: string
   patientId?: string
   patientName?: string
   doctorName?: string
   followUpDate?: string
   notes?: string
+  type?: string
   [key: string]: unknown
 }
-interface Operation {
-  id: string
-  patientId: string
-  patientName: string
-  date: string
-  operationType: string
-  operatedBy: string
+
+// Define Prescription type
+export interface Prescription extends FollowUpItem {
+  type: 'prescription'
+}
+
+// Define Operation/Inpatient type
+export interface Operation extends FollowUpItem {
+  type: 'inpatient'
+  date?: string
+  operationType?: string
+  operatedBy?: string
   assistants?: string
   preOpDiagnosis?: string
   postOpDiagnosis?: string
   procedure?: string
   findings?: string
   complications?: string
-  followUpDate?: string
+  doctorNames?: string[]
   reviewOn?: string
-  notes?: string
-  [key: string]: unknown
-}
-
-interface Patient {
-  id?: string
-  date?: string
-  patientId: string
-  name?: string
-  guardian?: string
-  dob?: string
-  age?: number | string
-  gender?: string
-  phone?: string
-  address?: string
-  [key: string]: unknown
 }
 
 interface FollowUpSectionProps {
-  operations: Operation[]
-  prescriptions?: Prescription[]
+  prescriptions?: FollowUpItem[]
   loading: boolean
 }
 
-const FollowUpSection: React.FC<FollowUpSectionProps> = ({
-  operations,
-  prescriptions = [],
-  loading
-}) => {
+const FollowUpSection: React.FC<FollowUpSectionProps> = ({ prescriptions = [], loading }) => {
   const [searchTerm, setSearchTerm] = useState('')
-  const [patients, setPatients] = useState<Patient[]>([])
-
-  // Load patients once on mount
-  React.useEffect(() => {
-    const loadPatients = async (): Promise<void> => {
-      try {
-        if (window.api?.getPatients) {
-          const response = await window.api.getPatients()
-
-          let patientsData: Patient[] = []
-
-          if (response && typeof response === 'object') {
-            if ('success' in response && 'data' in response) {
-              // Handle standardized response format
-              const standardizedResponse = response as StandardizedResponse<unknown>
-              if (standardizedResponse.success && Array.isArray(standardizedResponse.data)) {
-                patientsData = standardizedResponse.data as unknown as Patient[]
-              } else {
-                console.warn(
-                  'Patients response unsuccessful or data is not an array:',
-                  standardizedResponse.message || 'No message provided'
-                )
-                toast.error(
-                  `Failed to load patients: ${standardizedResponse.message || 'Unknown error'}`
-                )
-                patientsData = []
-              }
-            } else if (Array.isArray(response)) {
-              // Handle legacy format (direct array)
-              patientsData = response as unknown as Patient[]
-            } else {
-              console.warn('Unexpected patients response format:', response)
-              patientsData = []
-            }
-          }
-
-          setPatients(patientsData)
-        }
-      } catch (err) {
-        console.error('Failed to load patients:', err)
-        toast.error(
-          `Failed to load patients: ${err instanceof Error ? err.message : 'Unknown error'}`
-        )
-      }
-    }
-    loadPatients()
-  }, [])
-
-  // Filter operations based on search term
-  const filteredOperations = operations.filter((operation) => {
-    const patientName = String(operation.patientName || '').toLowerCase()
-    const patientId = String(operation.patientId || '').toLowerCase()
-    const doctorName = String(operation.surgeon || operation.operatedBy || '').toLowerCase()
-    const searchLower = searchTerm.toLowerCase()
-
-    return (
-      patientName.includes(searchLower) ||
-      patientId.includes(searchLower) ||
-      doctorName.includes(searchLower)
-    )
-  })
 
   // Filter prescriptions based on search term
   const filteredPrescriptions = prescriptions.filter((prescription) => {
@@ -145,11 +60,8 @@ const FollowUpSection: React.FC<FollowUpSectionProps> = ({
     )
   })
 
-  // Combine operations and prescriptions into a single list with a _type flag
-  const combinedFollowUps = [
-    ...filteredOperations.map((o) => ({ ...o, _type: 'Operation' as const })),
-    ...filteredPrescriptions.map((p) => ({ ...p, _type: 'Prescription' as const }))
-  ]
+  // Use the filtered prescriptions directly as they already have the type field
+  const combinedFollowUps = filteredPrescriptions
 
   // Format date for display
   // const formatDate = (dateString: unknown): string => {
@@ -172,7 +84,7 @@ const FollowUpSection: React.FC<FollowUpSectionProps> = ({
   const getFollowUpReason = (operation: Operation): string => {
     // Check various fields that might contain follow-up reason
     return (
-      operation.notes ||
+      (operation.notes as string) ||
       operation.preOpDiagnosis ||
       operation.postOpDiagnosis ||
       operation.findings ||
@@ -187,17 +99,16 @@ const FollowUpSection: React.FC<FollowUpSectionProps> = ({
   }
 
   // Helper to get phone number depending on item type
-  const getPhoneNumber = (item: Operation | Prescription): string => {
-    const isOp = (item as Operation)._type === 'Operation'
+  const getPhoneNumber = (item: FollowUpItem): string => {
+    const isOp = item.type === 'inpatient'
     if (isOp) {
-      const op = item as Operation
-      const patient = patients.find((p) => p.patientId === op.patientId)
+      const patient = prescriptions.find((p) => p.patientId === item.patientId)
       return String(patient?.phone || patient?.['PHONE NUMBER'] || '')
     }
-    return String((item as Prescription)['PHONE NUMBER'] || (item as Prescription).phone || '')
+    return String(item['PHONE NUMBER'] || item.phone || '')
   }
 
-  const handleWhatsappClick = (item: Operation | Prescription): void => {
+  const handleWhatsappClick = (item: FollowUpItem): void => {
     // Craft a professional, multi-line WhatsApp message with bold highlights (use * for bold on WhatsApp)
     const lines = [
       `*Dear ${item['PATIENT NAME'] || item.patientName || 'Patient'},*`,
@@ -219,11 +130,18 @@ const FollowUpSection: React.FC<FollowUpSectionProps> = ({
     // Open WhatsApp chat with the encoded message
     window.open(`https://wa.me/${phone}?text=${encoded}`, '_blank')
   }
-  console.log(combinedFollowUps)
+  // Add type field to items if missing
+  const processedFollowUps = combinedFollowUps.map((item) => {
+    if (!item.type) {
+      // If no type is specified, default to prescription
+      return { ...item, type: 'prescription' }
+    }
+    return item
+  })
   return (
     <div className="bg-white p-8 rounded-lg border border-gray-200">
       <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Follow-Up / Review</h2>
+        <h2 className="text-xl font-semibold">{`Follow-Up / Review ${combinedFollowUps.length}`}</h2>
         <div className="relative w-1/4">
           <input
             type="text"
@@ -253,7 +171,7 @@ const FollowUpSection: React.FC<FollowUpSectionProps> = ({
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
         </div>
-      ) : combinedFollowUps.length === 0 ? (
+      ) : processedFollowUps.length === 0 ? (
         <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200 text-center">
           <p className="text-gray-500">No follow-ups scheduled for today.</p>
         </div>
@@ -287,27 +205,30 @@ const FollowUpSection: React.FC<FollowUpSectionProps> = ({
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {combinedFollowUps.map((item) => {
-                  const isOp = item._type === 'Operation'
+                {processedFollowUps.map((item) => {
+                  const isOp = item.type === 'inpatient'
                   const reviewDate = isOp
-                    ? item['reviewOn'] || item['FOLLOW UP DATE'] || ''
+                    ? (item as Operation)['reviewOn'] || item['followUpDate'] || ''
                     : item['FOLLOW UP DATE'] || '-'
                   const doctorName = isOp
-                    ? String(item.operatedBy) || 'N/A'
+                    ? String((item as Operation).doctorNames?.[0] || item.doctorName) || 'N/A'
                     : String(item.doctorName || item['DOCTOR NAME'] || 'N/A')
+                  const phone = isOp
+                    ? String((item as Operation).phone || item.phone) || 'N/A'
+                    : String(item.phone || item['PHONE NUMBER'] || 'N/A')
                   const followUpReason = isOp
-                    ? getFollowUpReason(item)
-                    : getPrescriptionReason(item)
+                    ? getFollowUpReason(item as Operation)
+                    : getPrescriptionReason(item as Prescription)
                   const patientName = isOp
-                    ? String(item.patientName || 'N/A')
+                    ? String(item.name || 'N/A')
                     : String(item.patientName || item['PATIENT NAME'] || 'N/A')
                   const patientId = isOp
                     ? String(item.patientId || 'N/A')
                     : String(item.patientId || item['PATIENT ID'] || 'N/A')
-                  return (
+                  return item.id ? (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                        {item._type}
+                        {item.type === 'prescription' ? 'Prescription' : 'Inpatient'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{patientName}</div>
@@ -324,15 +245,12 @@ const FollowUpSection: React.FC<FollowUpSectionProps> = ({
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900 max-w-md truncate">
-                          {(() => {
-                            const phone = getPhoneNumber(item)
-                            return phone || 'N/A'
-                          })()}
+                          <div>{phone}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                          {reviewDate}
+                          {reviewDate as React.ReactNode}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -344,7 +262,7 @@ const FollowUpSection: React.FC<FollowUpSectionProps> = ({
                         </button>
                       </td>
                     </tr>
-                  )
+                  ) : null
                 })}
               </tbody>
             </table>

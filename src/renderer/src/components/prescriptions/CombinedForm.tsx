@@ -657,7 +657,18 @@ const CombinedForm = ({
     const [dynamicOthersOptions, setDynamicOthersOptions] = useState<string[]>([])
 
     const fetchDropdownOptions = async (): Promise<void> => {
-        try {
+        const presentOptions = localStorage.getItem('presentOptions')
+        const previousOptions = localStorage.getItem('previousOptions')
+        const othersOptions = localStorage.getItem('othersOptions')
+        if (presentOptions && previousOptions && othersOptions) {
+            console.log('ikkada options')
+            setDynamicPresentComplainOptions(JSON.parse(presentOptions))
+            setDynamicPreviousHistoryOptions(JSON.parse(previousOptions))
+            setDynamicOthersOptions(JSON.parse(othersOptions))
+            return
+        }else{
+            console.log('ikkadiki rale')
+            try {
             const [presentComplainOpts, previousHistoryOpts, othersOpts] = await Promise.all([
                 window.api.getDropdownOptions('presentComplainOptions'),
                 window.api.getDropdownOptions('previousHistoryOptions'),
@@ -670,6 +681,10 @@ const CombinedForm = ({
             const previousOptions = (previousHistoryOpts as { options?: string[] })?.options || []
             const othersOptions = (othersOpts as { options?: string[] })?.options || []
 
+            localStorage.setItem('presentOptions', JSON.stringify(presentOptions))
+            localStorage.setItem('previousOptions', JSON.stringify(previousOptions))
+            localStorage.setItem('othersOptions', JSON.stringify(othersOptions))
+
 
 
             setDynamicPresentComplainOptions([...new Set(presentOptions as string[])])
@@ -677,7 +692,7 @@ const CombinedForm = ({
             setDynamicOthersOptions([...new Set(othersOptions as string[])])
         } catch (error) {
             console.error('Error fetching dropdown options:', error)
-        }
+        }}
     }
 
     // Helper function to add new option permanently
@@ -685,6 +700,9 @@ const CombinedForm = ({
         try {
             console.log('Adding new option permanently:', fieldName, value)
             const response = await window.api.addDropdownOption(fieldName, value)
+            localStorage.removeItem('presentOptions')
+            localStorage.removeItem('previousOptions')
+            localStorage.removeItem('othersOptions')
             console.log('Response:', response)
             // Refresh options from backend
             await fetchDropdownOptions()
@@ -700,6 +718,9 @@ const CombinedForm = ({
             const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
             // Use the window.api interface to delete the option
             const response = await api.deleteDropdownOption(fieldName, value)
+            localStorage.removeItem('presentOptions')
+            localStorage.removeItem('previousOptions')
+            localStorage.removeItem('othersOptions')
             console.log('Response:', response)
             // Refresh options from backend
             await fetchDropdownOptions()

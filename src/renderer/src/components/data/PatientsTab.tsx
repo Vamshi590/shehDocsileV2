@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 
 interface Patient {
@@ -19,6 +19,10 @@ interface StandardizedResponse<T> {
   success: boolean
   data?: T | null
   message?: string
+  totalCount?: number
+  page?: number
+  pageSize?: number
+  totalPages?: number
 }
 
 const PatientsTab: React.FC = () => {
@@ -28,46 +32,37 @@ const PatientsTab: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
-  const [page, setPage] = useState(1)
-  const [hasMore, setHasMore] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
   const [sortField, setSortField] = useState<keyof Patient>('name')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   // Constants
-  const ITEMS_PER_PAGE = 20
+  const ITEMS_PER_PAGE = 10
 
-  // Refs
-  const observer = useRef<IntersectionObserver | null>(null)
-  const lastPatientElementRef = useCallback(
-    (node: HTMLTableRowElement | null) => {
-      if (loading) return
-      if (observer.current) observer.current.disconnect()
-      observer.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && hasMore) {
-          setPage((prevPage) => prevPage + 1)
-        }
-      })
-      if (node) observer.current.observe(node)
-    },
-    [loading, hasMore]
-  )
-
-  // Load patients on component mount
+  // Load patients on component mount and when page changes
   useEffect(() => {
     const fetchPatients = async (): Promise<void> => {
       try {
         setLoading(true)
         // Use type assertion for API calls with more specific types
         const api = window.api as unknown as {
-          getPatients?: () => Promise<StandardizedResponse<Patient[]> | Patient[]>
+          getPatients?: (
+            page: number,
+            pageSize: number
+          ) => Promise<StandardizedResponse<Patient[]> | Patient[]>
         }
 
         if (!api.getPatients) {
           throw new Error('API method getPatients is not available')
         }
 
-        const response = await api.getPatients()
+        const response = await api.getPatients(currentPage, ITEMS_PER_PAGE)
         let patientsData: Patient[] = []
+        let totalItems = 0
+        let totalPagesCount = 1
+        let currentPageNumber = currentPage
 
         // Handle standardized response format
         if (response && typeof response === 'object') {
@@ -76,6 +71,9 @@ const PatientsTab: React.FC = () => {
             const standardizedResponse = response as StandardizedResponse<Patient[]>
             if (standardizedResponse.success && Array.isArray(standardizedResponse.data)) {
               patientsData = standardizedResponse.data
+              totalItems = standardizedResponse.totalCount || 0
+              totalPagesCount = standardizedResponse.totalPages || 1
+              currentPageNumber = standardizedResponse.page || 1
             } else {
               console.warn(
                 'Patients response unsuccessful or data is not an array:',
@@ -89,6 +87,8 @@ const PatientsTab: React.FC = () => {
           } else if (Array.isArray(response)) {
             // Legacy format (direct array)
             patientsData = response
+            totalItems = response.length
+            totalPagesCount = Math.ceil(totalItems / ITEMS_PER_PAGE)
           } else {
             console.warn('Unexpected patients response format:', response)
             patientsData = []
@@ -96,6 +96,9 @@ const PatientsTab: React.FC = () => {
         }
 
         setPatients(patientsData)
+        setTotalCount(totalItems)
+        setTotalPages(totalPagesCount)
+        setCurrentPage(currentPageNumber)
         setError('')
       } catch (err) {
         console.error('Error loading patients:', err)
@@ -109,11 +112,13 @@ const PatientsTab: React.FC = () => {
     }
 
     fetchPatients()
-  }, [])
+  }, [currentPage])
 
   // Filter and sort patients when search term or sort criteria changes
   useEffect(() => {
     const filtered = patients.filter((patient) => {
+      if (!searchTerm.trim()) return true
+
       const searchLower = searchTerm.toLowerCase()
       return (
         patient.name?.toLowerCase().includes(searchLower) ||
@@ -134,13 +139,11 @@ const PatientsTab: React.FC = () => {
     })
 
     setFilteredPatients(sorted)
-    setHasMore(sorted.length > page * ITEMS_PER_PAGE)
-  }, [patients, searchTerm, sortField, sortDirection, page])
+  }, [patients, searchTerm, sortField, sortDirection])
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     setSearchTerm(e.target.value)
-    setPage(1) // Reset to first page on new search
   }
 
   // Handle sort column click
@@ -153,13 +156,68 @@ const PatientsTab: React.FC = () => {
     }
   }
 
-  // Get the current page of patients
-  const currentPagePatients = filteredPatients.slice(0, page * ITEMS_PER_PAGE)
+  // Handle page change
+  const handlePageChange = (page: number): void => {
+    if (page < 1 || page > totalPages || page === currentPage) return
+    setCurrentPage(page)
+  }
 
   // Render sort indicator
   const renderSortIndicator = (field: keyof Patient): string | null => {
     if (sortField !== field) return null
     return sortDirection === 'asc' ? ' ↑' : ' ↓'
+  }
+
+  // Generate page numbers for pagination
+  const getPageNumbers = (): number[] => {
+    const pageNumbers: number[] = []
+    const maxPagesToShow = 5
+
+    if (totalPages <= maxPagesToShow) {
+      // If total pages is less than max pages to show, display all pages
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i)
+      }
+    } else {
+      // Always include first page
+      pageNumbers.push(1)
+
+      // Calculate start and end of page range
+      let startPage = Math.max(2, currentPage - 1)
+      let endPage = Math.min(totalPages - 1, currentPage + 1)
+
+      // Adjust if at the beginning
+      if (currentPage <= 3) {
+        startPage = 2
+        endPage = Math.min(totalPages - 1, 4)
+      }
+
+      // Adjust if at the end
+      if (currentPage >= totalPages - 2) {
+        startPage = Math.max(2, totalPages - 3)
+        endPage = totalPages - 1
+      }
+
+      // Add ellipsis after first page if needed
+      if (startPage > 2) {
+        pageNumbers.push(-1) // -1 represents ellipsis
+      }
+
+      // Add middle pages
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i)
+      }
+
+      // Add ellipsis before last page if needed
+      if (endPage < totalPages - 1) {
+        pageNumbers.push(-2) // -2 represents ellipsis
+      }
+
+      // Always include last page
+      pageNumbers.push(totalPages)
+    }
+
+    return pageNumbers
   }
 
   return (
@@ -190,9 +248,7 @@ const PatientsTab: React.FC = () => {
             onChange={handleSearchChange}
           />
         </div>
-        <div className="text-sm text-gray-600 font-medium">
-          Total Patients: {filteredPatients.length}
-        </div>
+        <div className="text-sm text-gray-600 font-medium">Total Patients: {totalCount}</div>
       </div>
 
       {/* Error message */}
@@ -276,13 +332,9 @@ const PatientsTab: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {currentPagePatients.length > 0 ? (
-              currentPagePatients.map((patient, index) => (
-                <tr
-                  key={patient.id}
-                  ref={index === currentPagePatients.length - 1 ? lastPatientElementRef : null}
-                  className="hover:bg-gray-50"
-                >
+            {filteredPatients.length > 0 ? (
+              filteredPatients.map((patient) => (
+                <tr key={patient.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {patient.patientId}
                   </td>
@@ -346,8 +398,62 @@ const PatientsTab: React.FC = () => {
         </table>
       </div>
 
-      {/* Loading indicator at bottom */}
-      {loading && hasMore && (
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex justify-between items-center mt-4 px-2">
+          <div className="text-sm text-gray-700">
+            Showing page {currentPage} of {totalPages} ({totalCount} total records)
+          </div>
+          <div className="flex space-x-1">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className={`px-3 py-1 rounded-md ${
+                currentPage === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+            >
+              Previous
+            </button>
+
+            {getPageNumbers().map((pageNum, index) =>
+              pageNum < 0 ? (
+                <span key={`ellipsis-${index}`} className="px-3 py-1">
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={pageNum}
+                  onClick={() => handlePageChange(pageNum)}
+                  className={`px-3 py-1 rounded-md ${
+                    currentPage === pageNum
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              )
+            )}
+
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className={`px-3 py-1 rounded-md ${
+                currentPage === totalPages
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Loading indicator */}
+      {loading && (
         <div className="flex justify-center py-4">
           <svg
             className="animate-spin h-5 w-5 text-indigo-500"

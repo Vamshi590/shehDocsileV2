@@ -12,13 +12,19 @@ type Prescription = {
   amountReceived?: number
   amountDue?: number
   totalAmount?: number
+  type?: string
   [key: string]: unknown
 }
 
 interface DuesSectionProps {
   prescriptions: Prescription[]
   loading: boolean
-  onUpdateDue: (id: string, updatedAmount: number) => Promise<void>
+  onUpdateDue: (
+    id: string,
+    type?: string,
+    updatedAmount?: number,
+    receivedAmount?: number
+  ) => Promise<void>
 }
 
 const DuesSection: React.FC<DuesSectionProps> = ({ prescriptions, loading, onUpdateDue }) => {
@@ -57,13 +63,51 @@ const DuesSection: React.FC<DuesSectionProps> = ({ prescriptions, loading, onUpd
 
   // Handle saving the updated due amount
   const handleSaveDue = async (id: string): Promise<void> => {
-    await onUpdateDue(id, dueAmount)
+    // Find the prescription to get its type and calculate received amount
+    const prescription = prescriptions.find((p) => p.id === id)
+    if (!prescription) return
+
+    // Get the type of the prescription
+    const type = prescription.type || 'prescription'
+
+    // Calculate total amount
+    const totalAmount = Number(
+      prescription['TOTAL AMOUNT'] ||
+        prescription['VTOTAL AMOUNT'] ||
+        prescription.AMOUNT ||
+        prescription.netAmount ||
+        0
+    )
+
+    // Calculate new received amount (total - new due amount)
+    const newReceivedAmount = totalAmount - dueAmount
+
+    await onUpdateDue(id, type, dueAmount, newReceivedAmount)
     setEditingDue(null)
   }
 
   // Handle marking as fully paid
   const handleMarkAsPaid = async (id: string): Promise<void> => {
-    await onUpdateDue(id, 0)
+    // Find the prescription to get its type and calculate received amount
+    const prescription = prescriptions.find((p) => p.id === id)
+    if (!prescription) return
+
+    // Get the type of the prescription
+    const type = prescription.type || 'prescription'
+
+    // Calculate total amount
+    const totalAmount = Number(
+      prescription['TOTAL AMOUNT'] ||
+        prescription['VTOTAL AMOUNT'] ||
+        prescription.AMOUNT ||
+        prescription.netAmount ||
+        0
+    )
+
+    console.log('Total Amount:', totalAmount)
+
+    // When marking as paid, the received amount should be the total amount
+    await onUpdateDue(id, type, 0, totalAmount)
     setEditingDue(null)
   }
 
@@ -113,7 +157,7 @@ const DuesSection: React.FC<DuesSectionProps> = ({ prescriptions, loading, onUpd
   return (
     <div className="bg-white p-8 rounded-lg border border-gray-200">
       <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Dues</h2>
+        <h2 className="text-xl font-semibold">{`Dues ${prescriptions.length > 0 ? prescriptions.length : ''}`}</h2>
         <div className="relative w-1/4">
           <input
             type="text"
@@ -183,6 +227,12 @@ const DuesSection: React.FC<DuesSectionProps> = ({ prescriptions, loading, onUpd
                     scope="col"
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
+                    Type
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Remind
                   </th>
                   <th
@@ -196,15 +246,32 @@ const DuesSection: React.FC<DuesSectionProps> = ({ prescriptions, loading, onUpd
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredPrescriptions.map((prescription) => {
                   const totalAmount = Number(
-                    prescription['TOTAL AMOUNT'] || prescription.AMOUNT || prescription.amount || 0
+                    prescription['TOTAL AMOUNT'] ||
+                      prescription['VTOTAL AMOUNT'] ||
+                      prescription.AMOUNT ||
+                      prescription.netAmount ||
+                      0
                   )
                   const amountReceived = Number(
-                    prescription.amountReceived || prescription['AMOUNT RECEIVED'] || 0
+                    prescription.amountReceived ||
+                      prescription['AMOUNT RECEIVED'] ||
+                      prescription['VAMOUNT RECEIVED'] ||
+                      prescription.totalReceivedAmount ||
+                      0
                   )
-                  const amountDue = Number(prescription.amountDue || totalAmount - amountReceived)
+                  const amountDue = Number(
+                    prescription.amountDue ||
+                      totalAmount - amountReceived ||
+                      prescription.balanceAmount ||
+                      prescription['VAMOUNT DUE'] ||
+                      0
+                  )
                   const isEditing = editingDue === prescription.id
                   const patientName = String(
-                    prescription.patientName || prescription['PATIENT NAME'] || 'N/A'
+                    prescription.patientName ||
+                      prescription['PATIENT NAME'] ||
+                      prescription['name'] ||
+                      'N/A'
                   )
                   const patientId = String(
                     prescription.patientId || prescription['PATIENT ID'] || 'N/A'
@@ -238,6 +305,7 @@ const DuesSection: React.FC<DuesSectionProps> = ({ prescriptions, loading, onUpd
                           </span>
                         )}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap">{prescription.type}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div
                           onClick={() => handleWhatsappClick(prescription)}

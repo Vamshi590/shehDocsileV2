@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import EditableCombobox from '../common/EditableCombobox'
 import { format } from 'date-fns'
 import { toZonedTime } from 'date-fns-tz'
+import { adviceOptions } from '@renderer/utils/dropdownOptions'
 
 // Define the Lab type to match with other components
 type Lab = {
@@ -31,7 +32,6 @@ type Patient = {
 declare global {
   interface Window {
     api: {
-      // Lab-specific methods
       getPatients: () => Promise<Patient[]>
       getPrescriptions: () => Promise<Prescription[]>
       addPrescription: (prescription: Omit<Prescription, 'id'>) => Promise<Prescription>
@@ -39,11 +39,12 @@ declare global {
       deletePrescription: (id: string) => Promise<void>
       searchPrescriptions: (searchTerm: string) => Promise<Prescription[]>
       getTodaysPrescriptions: () => Promise<Prescription[]>
+      getPrescriptionsById: (id: string) => Promise<Prescription[]>
       getLatestPrescriptionId: () => Promise<number>
       getPrescriptionsByPatientId: (patientId: string) => Promise<Prescription[]>
       getDropdownOptions: (fieldName: string) => Promise<string[]>
-      addDropdownOption: (fieldName: string, value: string) => Promise<void>
       deleteDropdownOption: (fieldName: string, value: string) => Promise<void>
+      addDropdownOption: (fieldName: string, value: string) => Promise<void>
       openPdfInWindow: (pdfBuffer: Uint8Array) => Promise<{ success: boolean; error?: string }>
       getLatestPatientId: () => Promise<number>
       getLabs: () => Promise<Lab[]>
@@ -53,6 +54,13 @@ declare global {
       searchLabs: (patientId: string) => Promise<Lab[]>
       getTodaysLabs: () => Promise<Lab[]>
       getPrescriptionsByDate: (date: string) => Promise<Prescription[]>
+      getdues: () => Promise<Prescription[]>
+      updateDue: (
+        id: string,
+        type?: string,
+        updatedAmount?: number,
+        receivedAmount?: number
+      ) => Promise<Prescription>
     }
   }
 }
@@ -455,6 +463,12 @@ const LabForm: React.FC<LabFormProps> = ({
         'VAMOUNT RECEIVED': amountReceived,
         'VAMOUNT DUE': amountDue
       }))
+    } else if (name === 'PATIENT NAME') {
+      const patientName = value as string
+      setFormData((prev) => ({
+        ...prev,
+        'PATIENT NAME': patientName
+      }))
     }
   }
 
@@ -528,22 +542,16 @@ const LabForm: React.FC<LabFormProps> = ({
     await onSubmit(submissionData)
 
     // Reset both forms after submission while preserving patient info
-    const patientInfo = getPatientInfo()
 
     // Reset regular form
     setFormData({
-      ...getDefaultFormValues(false),
-      ...patientInfo,
-      createdBy: getCurrentUser()
-    } as Omit<Lab, 'id'>)
+      ...getDefaultFormValues(true)
+    })
 
     // Reset vennela form
     setVannelaFormData({
-      ...getDefaultFormValues(true),
-      ...patientInfo,
-      createdBy: getCurrentUser(),
-      type: 'vannela'
-    } as Omit<Lab, 'id'>)
+      ...getDefaultFormValues(true)
+    })
 
     // Reset visible test counts
     setVisibleLabTests(2)
@@ -560,190 +568,195 @@ const LabForm: React.FC<LabFormProps> = ({
       <form onSubmit={handleCombinedSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Regular Labs Form */}
-          <div className="space-y-6 border-r pr-4">
-            <h3 className="text-lg font-medium text-blue-800 border-b pb-2">Regular Labs</h3>
-            {/* Lab Tests Section */}
-            <div className="bg-white p-4 rounded-md shadow">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Lab Tests</h3>
-              <div className="space-y-4">
-                {Array.from({ length: visibleLabTests }).map((_, index) => {
-                  const testNumber = index + 1
-                  const testKey = `LAB TEST ${testNumber}`
-                  const amountKey = `AMOUNT ${testNumber}`
+          {!isGeneralCustomer && (
+            <div className="space-y-6 border-r pr-4">
+              <h3 className="text-lg font-medium text-blue-800 border-b pb-2">Regular Labs</h3>
+              {/* Lab Tests Section */}
+              <div className="bg-white p-4 rounded-md shadow">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Lab Tests</h3>
+                <div className="space-y-4">
+                  {Array.from({ length: visibleLabTests }).map((_, index) => {
+                    const testNumber = index + 1
+                    const testKey = `LAB TEST ${testNumber}`
+                    const amountKey = `AMOUNT ${testNumber}`
 
-                  return (
-                    <div key={testNumber} className="grid grid-cols-2 gap-4">
-                      {/* Lab Test Name */}
-                      <div>
-                        <label
-                          htmlFor={testKey}
-                          className="block text-sm font-medium text-gray-700"
-                        >
-                          Lab Test {testNumber}
-                        </label>
-                        <EditableCombobox
-                          id={testKey}
-                          name={testKey}
-                          value={(formData[testKey] as string) || ''}
-                          onChange={(e) => handleChange(e)}
-                          options={[]}
-                          placeholder={`Enter lab test name ${testNumber}`}
-                        />
-                      </div>
-
-                      {/* Amount */}
-                      <div>
-                        <label
-                          htmlFor={amountKey}
-                          className="block text-sm font-medium text-gray-700"
-                        >
-                          Amount {testNumber}
-                        </label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <span className="text-gray-500 sm:text-sm">₹</span>
-                          </div>
-                          <input
-                            type="number"
-                            name={amountKey}
-                            id={amountKey}
-                            value={(formData[amountKey] as string) || ''}
-                            onChange={handleChange}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 pl-8 pr-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="0.00"
+                    return (
+                      <div key={testNumber} className="grid grid-cols-2 gap-4">
+                        {/* Lab Test Name */}
+                        <div>
+                          <label
+                            htmlFor={testKey}
+                            className="block text-sm font-medium text-gray-700"
+                          >
+                            Lab Test {testNumber}
+                          </label>
+                          <EditableCombobox
+                            id={testKey}
+                            name={testKey}
+                            value={(formData[testKey] as string) || ''}
+                            onChange={(e) => handleChange(e)}
+                            options={adviceOptions}
+                            placeholder={`Enter lab test name ${testNumber}`}
                           />
                         </div>
+
+                        {/* Amount */}
+                        <div>
+                          <label
+                            htmlFor={amountKey}
+                            className="block text-sm font-medium text-gray-700"
+                          >
+                            Amount {testNumber}
+                          </label>
+                          <div className="mt-1 relative rounded-md shadow-sm">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <span className="text-gray-500 sm:text-sm">₹</span>
+                            </div>
+                            <input
+                              type="number"
+                              name={amountKey}
+                              id={amountKey}
+                              value={(formData[amountKey] as string) || ''}
+                              onChange={handleChange}
+                              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 pl-8 pr-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                {visibleLabTests < 10 && (
+                  <button
+                    type="button"
+                    onClick={() => setVisibleLabTests(Math.min(visibleLabTests + 1, 10))}
+                    className="mt-4 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 mr-2"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                      />
+                    </svg>
+                    Add More Lab Tests
+                  </button>
+                )}
+              </div>
+
+              {/* Billing Section */}
+              <div className="bg-white p-4 rounded-md shadow">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Billing Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Total Amount */}
+                  <div>
+                    <label
+                      htmlFor="TOTAL AMOUNT"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Total Amount
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">₹</span>
+                      </div>
+                      <input
+                        type="number"
+                        name="TOTAL AMOUNT"
+                        id="TOTAL AMOUNT"
+                        value={(formData['TOTAL AMOUNT'] as number) || 0}
+                        onWheel={preventWheelChange}
+                        readOnly
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 pl-8 pr-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-gray-100"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Discount Percentage */}
+                  <div>
+                    <label
+                      htmlFor="DISCOUNT PERCENTAGE"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Discount (%)
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <input
+                        type="number"
+                        name="DISCOUNT PERCENTAGE"
+                        id="DISCOUNT PERCENTAGE"
+                        value={(formData['DISCOUNT PERCENTAGE'] as number)?.toString() || '0'}
+                        onWheel={preventWheelChange}
+                        onChange={handleChange}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                      />
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">%</span>
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-              {visibleLabTests < 10 && (
-                <button
-                  type="button"
-                  onClick={() => setVisibleLabTests(Math.min(visibleLabTests + 1, 10))}
-                  className="mt-4 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 mr-2"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                    />
-                  </svg>
-                  Add More Lab Tests
-                </button>
-              )}
-            </div>
-
-            {/* Billing Section */}
-            <div className="bg-white p-4 rounded-md shadow">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Billing Information</h3>
-              <div className="grid grid-cols-2 gap-4">
-                {/* Total Amount */}
-                <div>
-                  <label htmlFor="TOTAL AMOUNT" className="block text-sm font-medium text-gray-700">
-                    Total Amount
-                  </label>
-                  <div className="mt-1 relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-500 sm:text-sm">₹</span>
-                    </div>
-                    <input
-                      type="number"
-                      name="TOTAL AMOUNT"
-                      id="TOTAL AMOUNT"
-                      value={(formData['TOTAL AMOUNT'] as number) || 0}
-                      onWheel={preventWheelChange}
-                      readOnly
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 pl-8 pr-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-gray-100"
-                    />
                   </div>
-                </div>
 
-                {/* Discount Percentage */}
-                <div>
-                  <label
-                    htmlFor="DISCOUNT PERCENTAGE"
-                    className="block text-sm font-medium text-gray-700"
-                  >
-                    Discount (%)
-                  </label>
-                  <div className="mt-1 relative rounded-md shadow-sm">
-                    <input
-                      type="number"
-                      name="DISCOUNT PERCENTAGE"
-                      id="DISCOUNT PERCENTAGE"
-                      value={(formData['DISCOUNT PERCENTAGE'] as number)?.toString() || '0'}
-                      onWheel={preventWheelChange}
-                      onChange={handleChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                    />
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                      <span className="text-gray-500 sm:text-sm">%</span>
+                  {/* Amount Received */}
+                  <div>
+                    <label
+                      htmlFor="AMOUNT RECEIVED"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Amount Received
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">₹</span>
+                      </div>
+                      <input
+                        type="number"
+                        name="AMOUNT RECEIVED"
+                        id="AMOUNT RECEIVED"
+                        value={(formData['AMOUNT RECEIVED'] as number)?.toString() || '0'}
+                        onWheel={preventWheelChange}
+                        onChange={handleChange}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 pl-8 pr-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        min="0"
+                        step="0.01"
+                      />
                     </div>
                   </div>
-                </div>
 
-                {/* Amount Received */}
-                <div>
-                  <label
-                    htmlFor="AMOUNT RECEIVED"
-                    className="block text-sm font-medium text-gray-700"
-                  >
-                    Amount Received
-                  </label>
-                  <div className="mt-1 relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-500 sm:text-sm">₹</span>
+                  {/* Amount Due */}
+                  <div>
+                    <label htmlFor="AMOUNT DUE" className="block text-sm font-medium text-gray-700">
+                      Amount Due
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">₹</span>
+                      </div>
+                      <input
+                        type="number"
+                        name="AMOUNT DUE"
+                        id="AMOUNT DUE"
+                        value={(formData['AMOUNT DUE'] as number)?.toString() || '0'}
+                        onWheel={preventWheelChange}
+                        readOnly
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 pl-8 pr-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-gray-100"
+                      />
                     </div>
-                    <input
-                      type="number"
-                      name="AMOUNT RECEIVED"
-                      id="AMOUNT RECEIVED"
-                      value={(formData['AMOUNT RECEIVED'] as number)?.toString() || '0'}
-                      onWheel={preventWheelChange}
-                      onChange={handleChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 pl-8 pr-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                </div>
-
-                {/* Amount Due */}
-                <div>
-                  <label htmlFor="AMOUNT DUE" className="block text-sm font-medium text-gray-700">
-                    Amount Due
-                  </label>
-                  <div className="mt-1 relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-500 sm:text-sm">₹</span>
-                    </div>
-                    <input
-                      type="number"
-                      name="AMOUNT DUE"
-                      id="AMOUNT DUE"
-                      value={(formData['AMOUNT DUE'] as number)?.toString() || '0'}
-                      onWheel={preventWheelChange}
-                      readOnly
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 pl-8 pr-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-gray-100"
-                    />
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Vannela Labs Form */}
           <div className="space-y-6 pl-4">
@@ -820,7 +833,7 @@ const LabForm: React.FC<LabFormProps> = ({
                           name={testKey}
                           value={(vannelaFormData[testKey] as string) || ''}
                           onChange={(e) => handleVannelaChange(e)}
-                          options={[]}
+                          options={adviceOptions}
                           placeholder={`Enter vannela lab test name ${testNumber}`}
                         />
                       </div>

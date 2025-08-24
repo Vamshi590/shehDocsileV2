@@ -124,7 +124,8 @@ const api = {
     ipcRenderer.invoke('checkPermission', userId, module),
 
   // Patient Management
-  getPatients: () => ipcRenderer.invoke('getPatients'),
+  getPatients: (page?: number, pageSize?: number) =>
+    ipcRenderer.invoke('getPatients', page, pageSize),
   getLatestPatientId: () => ipcRenderer.invoke('getLatestPatientId'),
   addPatient: (patient: Patient) => ipcRenderer.invoke('addPatient', patient),
   updatePatient: (id: string, patient: Patient) => ipcRenderer.invoke('updatePatient', id, patient),
@@ -133,7 +134,8 @@ const api = {
   getPatientById: (patientId: string) => ipcRenderer.invoke('getPatientById', patientId),
 
   // Prescriptions & Receipts Management
-  getPrescriptions: () => ipcRenderer.invoke('getPrescriptions'),
+  getPrescriptions: (page?: number, pageSize?: number) =>
+    ipcRenderer.invoke('getPrescriptions', page, pageSize),
   getPrescriptionsByPatientId: (patientId: string) =>
     ipcRenderer.invoke('getPrescriptionsByPatientId', patientId),
   addPrescription: (prescription: Prescription) =>
@@ -146,7 +148,9 @@ const api = {
   getTodaysPrescriptions: () => ipcRenderer.invoke('getTodaysPrescriptions'),
   getPrescriptionsByDate: (date: string) => ipcRenderer.invoke('getPrescriptionsByDate', date),
   getLatestPrescriptionId: () => ipcRenderer.invoke('getLatestPrescriptionId'),
+  getPrescriptionsById: (id: string) => ipcRenderer.invoke('getPrescriptionsById', id),
 
+  getReports: (id: string) => ipcRenderer.invoke('getReports', id),
   // Labs Management
   getLabs: () => ipcRenderer.invoke('getLabs'),
   addLab: (lab: Omit<Lab, 'id'>) => ipcRenderer.invoke('addLab', lab),
@@ -276,7 +280,36 @@ const api = {
   getDropdownOptions: (fieldName: string) => ipcRenderer.invoke('getDropdownOptions', fieldName),
 
   // PDF Management
-  openPdfInWindow: (pdfBuffer: Uint8Array) => ipcRenderer.invoke('openPdfInWindow', pdfBuffer)
+  openPdfInWindow: (pdfBuffer: Uint8Array) => ipcRenderer.invoke('openPdfInWindow', pdfBuffer),
+
+  // Dues Management
+  getdues: () => ipcRenderer.invoke('getdues'),
+  updateDue: (id: string, type: string, updatedAmount: number, receivedAmount?: number) =>
+    ipcRenderer.invoke('updateDue', id, type, updatedAmount, receivedAmount),
+  getFollowUps: () => ipcRenderer.invoke('getFollowUps'),
+
+  // Expenses Management
+  getExpenses: () => ipcRenderer.invoke('getExpenses'),
+  getExpensesByDateRange: (startDate: string, endDate: string) =>
+    ipcRenderer.invoke('getExpensesByDateRange', { startDate, endDate }),
+  getExpensesByCategory: (category: string) =>
+    ipcRenderer.invoke('getExpensesByCategory', category),
+  addExpense: (expenseData: {
+    title: string
+    amount: string | number
+    category: string
+    reason?: string
+    date: string
+  }) => ipcRenderer.invoke('addExpense', expenseData),
+  updateExpense: (data: {
+    id: string
+    title: string
+    amount: string | number
+    category: string
+    reason?: string
+    date: string
+  }) => ipcRenderer.invoke('updateExpense', data),
+  deleteExpense: (id: string) => ipcRenderer.invoke('deleteExpense', id)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

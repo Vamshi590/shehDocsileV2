@@ -659,6 +659,7 @@ const Labs: React.FC = () => {
             <button
               onClick={() => {
                 setIsAddingVennelaLab(true)
+                setIsAddingNewLab(false) // Ensure regular lab form is not shown
                 setFoundPatient(null) // Clear any selected patient for general customer form
               }}
               className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md transition-colors shadow-sm flex items-center space-x-1.5"

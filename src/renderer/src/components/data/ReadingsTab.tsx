@@ -10,12 +10,24 @@ type Prescription = {
   [key: string]: string | number | boolean | undefined
 }
 
+// Define standardized response format
+interface StandardizedResponse<T> {
+  success: boolean
+  data?: T | null
+  message?: string
+  totalCount?: number
+  page?: number
+  pageSize?: number
+  totalPages?: number
+}
+
 const ReadingsTab: React.FC = () => {
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [itemsPerPage] = useState<number>(10)
+  const [totalPages, setTotalPages] = useState<number>(1)
   const [sortField, setSortField] = useState<string>('date')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [searchTerm, setSearchTerm] = useState<string>('')
@@ -26,9 +38,54 @@ const ReadingsTab: React.FC = () => {
       try {
         setLoading(true)
         // Use type assertion for API calls with more specific types
-        const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
-        const data = await api.getPrescriptions()
-        setPrescriptions(data as Prescription[])
+        const api = window.api as unknown as {
+          getPrescriptions?: (
+            page: number,
+            pageSize: number
+          ) => Promise<StandardizedResponse<Prescription[]> | Prescription[]>
+        }
+
+        if (!api.getPrescriptions) {
+          throw new Error('API method getPrescriptions is not available')
+        }
+
+        const response = await api.getPrescriptions(currentPage, itemsPerPage)
+        let prescriptionsData: Prescription[] = []
+        let totalItems = 0
+        let totalPagesCount = 1
+        let currentPageNumber = currentPage
+
+        // Handle standardized response format
+        if (response && typeof response === 'object') {
+          if ('success' in response && 'data' in response) {
+            // New standardized format
+            const standardizedResponse = response as StandardizedResponse<Prescription[]>
+            if (standardizedResponse.success && Array.isArray(standardizedResponse.data)) {
+              prescriptionsData = standardizedResponse.data
+              totalItems = standardizedResponse.totalCount || 0
+              totalPagesCount = standardizedResponse.totalPages || 1
+              currentPageNumber = standardizedResponse.page || 1
+            } else {
+              console.warn(
+                'Prescriptions response unsuccessful or data is not an array:',
+                standardizedResponse.message || 'No message provided'
+              )
+              prescriptionsData = []
+            }
+          } else if (Array.isArray(response)) {
+            // Legacy format (direct array)
+            prescriptionsData = response
+            totalItems = response.length
+            totalPagesCount = Math.ceil(totalItems / itemsPerPage)
+          } else {
+            console.warn('Unexpected prescriptions response format:', response)
+            prescriptionsData = []
+          }
+        }
+
+        setPrescriptions(prescriptionsData)
+        setCurrentPage(currentPageNumber)
+        setTotalPages(totalPagesCount)
         setError('')
       } catch (err) {
         console.error('Error fetching prescriptions:', err)
@@ -39,7 +96,7 @@ const ReadingsTab: React.FC = () => {
     }
 
     fetchPrescriptions()
-  }, [])
+  }, [currentPage, itemsPerPage])
 
   // Handle sorting
   const handleSort = (field: string): void => {
@@ -80,11 +137,10 @@ const ReadingsTab: React.FC = () => {
       return sortDirection === 'asc' ? comparison : -comparison
     })
 
-  // Pagination
-  const indexOfLastItem = currentPage * itemsPerPage
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage
-  const currentPagePrescriptions = filteredPrescriptions.slice(indexOfFirstItem, indexOfLastItem)
-  const totalPages = Math.ceil(filteredPrescriptions.length / itemsPerPage)
+  // For client-side filtering, we need to handle pagination locally
+  const currentPagePrescriptions = searchTerm
+    ? filteredPrescriptions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    : filteredPrescriptions // When not searching, we use the server-paginated data
 
   // Handle page change
   const handlePageChange = (pageNumber: number): void => {
@@ -240,6 +296,48 @@ const ReadingsTab: React.FC = () => {
                 >
                   Phone Number {renderSortIndicator('phoneNumber')}
                 </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  colSpan={4}
+                >
+                  pres-Right Eye-Distance
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  colSpan={4}
+                >
+                  pres-Right Eye-Near
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  colSpan={4}
+                >
+                  pres-Left Eye-Distance
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  colSpan={4}
+                >
+                  pres-Left Eye-Near
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  colSpan={4}
+                >
+                  AR-Right Eye
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  colSpan={4}
+                >
+                  AR-Left Eye
+                </th>
                 {/* Glasses Reading Headers */}
                 <th
                   scope="col"
@@ -298,48 +396,7 @@ const ReadingsTab: React.FC = () => {
                 >
                   PGP-Left Eye-Near
                 </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  colSpan={4}
-                >
-                  SR-Right Eye-Distance
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  colSpan={4}
-                >
-                  SR-Right Eye-Near
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  colSpan={4}
-                >
-                  SR-Left Eye-Distance
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  colSpan={4}
-                >
-                  SR-Left Eye-Near
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  colSpan={4}
-                >
-                  AR-Right Eye
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  colSpan={4}
-                >
-                  AR-Left Eye
-                </th>
+
                 <th
                   scope="col"
                   className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
@@ -405,6 +462,33 @@ const ReadingsTab: React.FC = () => {
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Vision
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Sph
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Cyl
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Axis
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Vision
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Sph
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Cyl
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Axis
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Vision
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Lids
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Sph
@@ -502,33 +586,7 @@ const ReadingsTab: React.FC = () => {
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Vision
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sph
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Cyl
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Axis
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Vision
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sph
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Cyl
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Axis
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Vision
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Lids
-                </th>
+
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Conjuctiva
                 </th>
@@ -627,6 +685,78 @@ const ReadingsTab: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {prescription['PHONE NUMBER'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-RE-D-SPH'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-RE-D-CYL'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-RE-D-AXIS'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-RE-D-VA'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-RE-N-SPH'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-RE-N-CYL'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-RE-N-AXIS'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-RE-N-VA'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-LE-D-SPH'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-LE-D-CYL'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-LE-D-AXIS'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-LE-D-BCVA'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-LE-N-SPH'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-LE-N-CYL'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-LE-N-AXIS'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['SR-LE-N-BCVA'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['AR-RE-SPH'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['AR-RE-CYL'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['AR-RE-AXIS'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['AR-RE-VA'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['AR-LE-SPH'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['AR-LE-CYL'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['AR-LE-AXIS'] || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {prescription['AR-LE-VA'] || '-'}
                     </td>
                     {/* Glasses Reading Data */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -727,78 +857,6 @@ const ReadingsTab: React.FC = () => {
                       {prescription['PGP-LE-N-BCVA'] || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-RE-D-SPH'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-RE-D-CYL'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-RE-D-AXIS'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-RE-D-VA'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-RE-N-SPH'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-RE-N-CYL'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-RE-N-AXIS'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-RE-N-VA'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-LE-D-SPH'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-LE-D-CYL'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-LE-D-AXIS'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-LE-D-BCVA'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-LE-N-SPH'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-LE-N-CYL'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-LE-N-AXIS'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['SR-LE-N-BCVA'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['AR-RE-SPH'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['AR-RE-CYL'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['AR-RE-AXIS'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['AR-RE-VA'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['AR-LE-SPH'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['AR-LE-CYL'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['AR-LE-AXIS'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {prescription['AR-LE-VA'] || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {prescription['CF-RE-LIDS'] || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -893,55 +951,62 @@ const ReadingsTab: React.FC = () => {
               )}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-between items-center">
-          <div className="text-sm text-gray-700">
-            Showing{' '}
-            <span className="font-medium">
-              {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredPrescriptions.length)}
-            </span>{' '}
-            of <span className="font-medium">{filteredPrescriptions.length}</span> results
-          </div>
-          <div className="flex space-x-1">
-            <button
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-              className={`px-3 py-1 rounded-md ${
-                currentPage === 1
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-              }`}
-            >
-              Previous
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+          {/* Pagination controls */}
+          <div className="flex flex-col items-center mt-4 space-y-2">
+            <div className="text-sm text-gray-700">
+              Showing <span className="font-medium">{currentPagePrescriptions.length}</span> of{' '}
+              <span className="font-medium">{filteredPrescriptions.length}</span> results
+            </div>
+            <div className="flex space-x-2">
               <button
-                key={page}
-                onClick={() => handlePageChange(page)}
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
                 className={`px-3 py-1 rounded-md ${
-                  currentPage === page
-                    ? 'bg-indigo-600 text-white'
+                  currentPage === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                 }`}
               >
-                {page}
+                Previous
               </button>
-            ))}
-            <button
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className={`px-3 py-1 rounded-md ${
-                currentPage === totalPages
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-              }`}
-            >
-              Next
-            </button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                // Show pages around current page
+                let pageNum
+                if (totalPages <= 5) {
+                  pageNum = i + 1
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i
+                } else {
+                  pageNum = currentPage - 2 + i
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => handlePageChange(pageNum)}
+                    className={`px-3 py-1 rounded-md ${
+                      currentPage === pageNum
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                )
+              })}
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className={`px-3 py-1 rounded-md ${
+                  currentPage === totalPages
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                }`}
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       )}

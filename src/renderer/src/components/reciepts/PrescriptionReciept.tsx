@@ -127,9 +127,9 @@ export default function HospitalReceipt({
 
         {/* Patient Information Section */}
         <div className="pb-3 mb-4 border-b border-[#000000]">
-          <h3 className="text-xs font-bold mb-3">PATIENT INFORMATION</h3>
+          <h3 className="text-[12px] font-bold mb-3">PATIENT INFORMATION</h3>
           {/* grid-based layout */}
-          <div className="text-[11px] grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
+          <div className="text-[12px] grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
             {/* Patient Name */}
             <div>
               <div className="font-bold">PATIENT NAME</div>
@@ -189,9 +189,9 @@ export default function HospitalReceipt({
         </div>
 
         <div className="pb-3 mb-4 border-b border-[#000000]">
-          <h3 className="text-xs font-bold mb-3">VITALS & HISTORY</h3>
+          <h3 className="text-[12px] font-bold mb-3">VITALS & HISTORY</h3>
           <div className="flex space-x-4">
-            <div className="flex flex-col space-y-1 text-[11px] w-[75%]">
+            <div className="flex flex-col space-y-1 text-[12px] w-[75%]">
               <div className="flex space-x-3">
                 <div className="font-bold">PRESENT COMPLAINT</div>
                 <div>{medicalHistoryData.presentComplaint || ''}</div>
@@ -229,13 +229,13 @@ export default function HospitalReceipt({
             <table className="w-full border-collapse text-[11px]">
               <thead>
                 <tr>
-                  <th className="border border-[#000000] p-2 text-left font-bold bg-[#ffffff]">
+                  <th className="border border-[#000000] p-2 text-left font-bold bg-[#ffffff] w-[50%]">
                     MEDICINE
                   </th>
-                  <th className="border border-[#000000] p-2 text-center font-bold w-20 bg-[#ffffff]">
+                  <th className="border border-[#000000] p-2 text-center font-bold w-[25%] bg-[#ffffff]">
                     TIMES
                   </th>
-                  <th className="border border-[#000000] p-2 text-center font-bold w-20 bg-[#ffffff]">
+                  <th className="border border-[#000000] p-2 text-center font-bold w-[25%] bg-[#ffffff]">
                     DAYS
                   </th>
                 </tr>
@@ -257,7 +257,7 @@ export default function HospitalReceipt({
           {((typeof advise === 'string' && advise) ||
             (Array.isArray(advise) && advise.length > 0)) && (
             <div className="pb-3 mb-1">
-              <div className="text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="text-[12px] grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Advice block */}
                 <div>
                   <div className="font-bold">Investigations</div>
@@ -274,15 +274,15 @@ export default function HospitalReceipt({
           )}
 
           {notes && (
-            <div className="text-[11px] flex items-center flex-col space-x-2">
-              <p className="font-bold">Advice :</p>
-              <p>{notes}</p>
+            <div className="text-[11px] flex items-center space-x-2">
+              <p className="font-bold text-sm">Advice :</p>
+              <p className="font-semibold">{notes}</p>
             </div>
           )}
           {reviewDate && (
             <div className="text-[11px]">
               <div>
-                <div className="font-bold">REVIEW DATE</div>
+                <div className="font-bold text-[12px]">REVIEW DATE</div>
                 <div>{reviewDate}</div>
               </div>
             </div>
@@ -323,8 +323,8 @@ export default function HospitalReceipt({
                 {new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata' })}
               </span>
             </div>
-            <p className="mt-1 text-[8px] font-semibold text-left">Cautions / Patient Guidance:</p>
-            <ul className="list-disc list-inside space-y-0.5 text-[8px] text-left">
+            <p className="mt-1 text-[9px] font-semibold text-left">Cautions / Patient Guidance:</p>
+            <ul className="list-disc list-inside space-y-0.5 text-[9px] text-left">
               <li>Complete the full course even if symptoms improve, unless advised otherwise.</li>
               <li>
                 Report immediately if you experience any adverse effects or worsening symptoms.
@@ -339,7 +339,7 @@ export default function HospitalReceipt({
         .receipt-container {
           width: 210mm;
           min-height: 297mm;
-          padding: 12mm;
+          padding: 8mm;
           font-family: 'Arial', sans-serif;
           line-height: 1.2;
           display: flex;
@@ -352,7 +352,7 @@ export default function HospitalReceipt({
 
         .receipt-footer {
           margin-top: auto;
-          padding-top: 20px;
+          padding-top: 10px;
         }
 
         @media print {

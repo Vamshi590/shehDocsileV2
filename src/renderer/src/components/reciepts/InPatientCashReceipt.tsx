@@ -21,6 +21,8 @@ interface PatientData {
   address: string
   mobile: string
   doctorName: string
+  doctorNames: string
+  onDutyDoctor: string
   department: string
   dateOfAdmit?: string
   dateOfDischarge?: string
@@ -214,6 +216,11 @@ export default function InPatientCashReceipt({
               <div>
                 <div className="font-bold">DOCTOR NAME</div>
                 <div>{patientData.doctorName}</div>
+              </div>
+              {/* Doctor Name */}
+              <div>
+                <div className="font-bold">ON DUTY DOCTOR</div>
+                <div>{patientData.onDutyDoctor}</div>
               </div>
               {/* Department */}
               <div>

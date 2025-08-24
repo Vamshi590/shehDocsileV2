@@ -1,40 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import DuesSection from '../components/duesFollowUp/DuesSection'
-import FollowUpSection from '../components/duesFollowUp/FollowUpSection'
+import FollowUpSection, {
+  Prescription,
+  Operation
+} from '../components/duesFollowUp/FollowUpSection'
 import { toast, Toaster } from 'sonner'
 
-// Define the Prescription type
-type Prescription = {
-  id: string
-  patientId?: string
-  patientName?: string
-  guardianName?: string
-  phone?: string
-  age?: string | number
-  gender?: string
-  address?: string
-  date?: string
-  receiptId?: string
-  amount?: string | number
-  paymentMethod?: string
-  amountReceived?: number
-  amountDue?: number
-  totalAmount?: number
-  [key: string]: unknown
-}
-
-// Define Operation type
-interface Operation {
-  id: string
-  patientId: string
-  patientName: string
-  date: string
-  operationType: string
-  operatedBy: string
-  followUpDate?: string
-  reviewOn?: string
-  [key: string]: unknown
-}
+// Using imported types from FollowUpSection.tsx
 
 // Define standardized response format
 interface StandardizedResponse<T> {
@@ -65,32 +37,69 @@ interface API {
     id: string,
     prescription: Prescription
   ) => Promise<StandardizedResponse<Prescription> | Prescription>
+
+  // Follow-up methods
+  getFollowUps?: () => Promise<
+    StandardizedResponse<Array<Prescription | Operation>> | Array<Prescription | Operation>
+  >
+
+  // Dues methods
+  getdues?: () => Promise<StandardizedResponse<Prescription[]> | Prescription[]>
+  updateDue?: (
+    id: string,
+    type?: string,
+    updatedAmount?: number,
+    receivedAmount?: number
+  ) => Promise<StandardizedResponse<Prescription> | Prescription>
+}
+
+// Define a local prescription type for dues that doesn't require the 'type' field
+interface LocalPrescription {
+  id: string
+  patientId?: string
+  patientName?: string
+  guardianName?: string
+  phone?: string
+  age?: string | number
+  gender?: string
+  address?: string
+  date?: string
+  receiptId?: string
+  amount?: string | number
+  paymentMethod?: string
+  amountReceived?: number
+  amountDue?: number
+  totalAmount?: number
+  type?: string
+  [key: string]: unknown
 }
 
 const DuesFollowUp: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dues' | 'followup'>('dues')
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>([])
-  const [operations, setOperations] = useState<Operation[]>([])
+  const [prescriptions, setPrescriptions] = useState<LocalPrescription[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   // Toast notifications state
-  const [followUpPrescriptions, setFollowUpPrescriptions] = useState<Prescription[]>([])
+  const [followUpPrescriptions, setFollowUpPrescriptions] = useState<
+    Array<Prescription | Operation>
+  >([])
 
   // Load prescriptions and operations on component mount
   useEffect(() => {
     loadPrescriptions()
-    loadOperations()
-    loadFollowUpPrescriptions()
+    loadFollowUps()
   }, [])
 
   // Function to load prescriptions from the backend
   const loadPrescriptions = async (): Promise<void> => {
     try {
       setLoading(true)
-      const response = await window.api.getPrescriptions()
+      const response = await window.api.getdues()
+
+      console.log('Dues:', response)
 
       // Handle standardized response format
-      let prescriptionsData: Prescription[] = []
+      let prescriptionsData: LocalPrescription[] = []
 
       if (response && typeof response === 'object') {
         if ('success' in response && 'data' in response) {
@@ -116,15 +125,14 @@ const DuesFollowUp: React.FC = () => {
 
       // Filter prescriptions with due amounts
       const prescriptionsWithDues = prescriptionsData.filter((prescription) => {
-        const totalAmount = Number(prescription['TOTAL AMOUNT'] || prescription.AMOUNT || 0)
-        const amountReceived = Number(
-          prescription.amountReceived || prescription['AMOUNT RECEIVED'] || 0
+        const amountDue = Number(
+          prescription.amountDue || prescription['AMOUNT DUE'] || prescription.balanceAmount || 0
         )
-        const amountDue = totalAmount - amountReceived
         return amountDue > 0
       })
 
-      setPrescriptions(prescriptionsWithDues)
+      // Cast to LocalPrescription[] since we're handling dues differently than follow-ups
+      setPrescriptions(prescriptionsWithDues as LocalPrescription[])
       setError('')
     } catch (err) {
       console.error('Error loading prescriptions:', err)
@@ -134,182 +142,82 @@ const DuesFollowUp: React.FC = () => {
     }
   }
 
-  // Function to load operations from the backend
-  const loadOperations = async (): Promise<void> => {
+  const loadFollowUps = async (): Promise<void> => {
     try {
       setLoading(true)
-      const api = window.api as API
-      // Check if getOperations method exists
-      if (api.getOperations) {
-        const response = await api.getOperations()
+      const api = window.api as unknown as API
 
-        // Handle standardized response format
-        let operationsData: Operation[] = []
-
-        if (response && typeof response === 'object') {
-          if ('success' in response && 'data' in response) {
-            // New standardized format
-            const standardizedResponse = response as StandardizedResponse<Operation[]>
-            if (standardizedResponse.success && Array.isArray(standardizedResponse.data)) {
-              operationsData = standardizedResponse.data
-            } else {
-              console.warn(
-                'Operation response unsuccessful or data is not an array:',
-                standardizedResponse.message || 'No message provided'
-              )
-              operationsData = []
-            }
-          } else if (Array.isArray(response)) {
-            // Legacy format (direct array)
-            operationsData = response
-          } else {
-            console.warn('Unexpected operations response format:', response)
-            operationsData = []
-          }
-        }
-
-        // Generate dates for yesterday, today and the next 4 days (6 days total)
-        const followUpDates: string[] = []
-
-        // Add yesterday's date
-        const yesterday = new Date()
-        yesterday.setDate(yesterday.getDate() - 1)
-        followUpDates.push(yesterday.toISOString().split('T')[0])
-
-        // Add today and next 4 days
-        for (let i = 0; i < 5; i++) {
-          const date = new Date()
-          date.setDate(date.getDate() + i)
-          followUpDates.push(date.toISOString().split('T')[0])
-        }
-
-        console.log('Looking for operations with follow-up dates:', followUpDates)
-
-        // Filter operations with follow-up dates in yesterday, today, and the next 4 days
-        const upcomingFollowUps = operationsData.filter((operation) => {
-          const followUpDate = operation.followUpDate || operation.reviewOn || ''
-          return followUpDates.includes(followUpDate)
-        })
-
-        setOperations(upcomingFollowUps)
-      } else {
-        console.error('getOperations method not available')
-        setError('Failed to load operations: API method not available')
+      // Check if getFollowUps method exists
+      if (!api.getFollowUps) {
+        console.error('getFollowUps method not available')
+        setError('Failed to load follow-ups: API method not available')
+        return
       }
-    } catch (err) {
-      console.error('Error loading operations:', err)
-      setError('Failed to load operations')
-    } finally {
-      setLoading(false)
-    }
-  }
 
-  const loadFollowUpPrescriptions = async (): Promise<void> => {
-    try {
-      setLoading(true)
-      const response = await window.api.getPrescriptions()
+      const response = await api.getFollowUps()
 
       // Handle standardized response format
-      let prescriptionsData: Prescription[] = []
+      let followUpsData: Array<Prescription | Operation> = []
 
       if (response && typeof response === 'object') {
         if ('success' in response && 'data' in response) {
           // New standardized format
           const standardizedResponse = response as StandardizedResponse<Prescription[]>
           if (standardizedResponse.success && Array.isArray(standardizedResponse.data)) {
-            prescriptionsData = standardizedResponse.data
+            followUpsData = standardizedResponse.data
           } else {
             console.warn(
-              'Prescription response unsuccessful or data is not an array:',
+              'Follow-ups response unsuccessful or data is not an array:',
               standardizedResponse.message || 'No message provided'
             )
-            prescriptionsData = []
+            followUpsData = []
           }
         } else if (Array.isArray(response)) {
           // Legacy format (direct array)
-          prescriptionsData = response
+          followUpsData = response
         } else {
-          console.warn('Unexpected prescriptions response format:', response)
-          prescriptionsData = []
+          console.warn('Unexpected follow-ups response format:', response)
+          followUpsData = []
         }
       }
 
-      // Check if prescriptions data exists
-      if (prescriptionsData.length > 0) {
-        // Generate dates for yesterday, today and the next 4 days (6 days total)
-        const followUpDates: string[] = []
-
-        // Add yesterday's date
-        const yesterday = new Date()
-        yesterday.setDate(yesterday.getDate() - 1)
-        followUpDates.push(yesterday.toISOString().split('T')[0])
-
-        // Add today and next 4 days
-        for (let i = 0; i < 5; i++) {
-          const date = new Date()
-          date.setDate(date.getDate() + i)
-          followUpDates.push(date.toISOString().split('T')[0])
-        }
-
-        console.log('Looking for prescriptions with follow-up dates:', followUpDates)
-
-        // Filter prescriptions with follow-up dates in yesterday, today, and the next 4 days
-        const upcomingFollowUps = prescriptionsData.filter((prescription) => {
-          const followUpDate = String(prescription['FOLLOW UP DATE'] || '')
-          return followUpDates.includes(followUpDate)
-        })
-
-        setFollowUpPrescriptions(upcomingFollowUps)
-      } else {
-        console.error('No prescription data available')
-        setFollowUpPrescriptions([])
-      }
+      console.log('Follow-ups loaded:', followUpsData.length)
+      setFollowUpPrescriptions(followUpsData)
     } catch (err) {
-      console.error('Error loading prescriptions:', err)
-      setError('Failed to load prescriptions')
+      console.error('Error loading follow-ups:', err)
+      setError('Failed to load follow-ups')
     } finally {
       setLoading(false)
     }
   }
 
   // Function to update due amount
-  const handleUpdateDue = async (id: string, updatedAmount: number): Promise<void> => {
+  const handleUpdateDue = async (
+    id: string,
+    type?: string,
+    updatedAmount?: number,
+    receivedAmount?: number
+  ): Promise<void> => {
     try {
       setLoading(true)
 
-      // Find the prescription to update
-      const prescription = prescriptions.find((p) => p.id === id)
+      // Find the due record to update
+      const dueRecord = prescriptions.find((p) => p.id === id)
 
-      if (!prescription) {
-        throw new Error('Prescription not found')
+      if (!dueRecord) {
+        throw new Error('Due record not found')
       }
 
-      // Calculate total amount from the prescription
-      const totalAmount = Number(
-        prescription['TOTAL AMOUNT'] || prescription.AMOUNT || prescription.amount || 0
-      )
+      // Get the type of the due record (prescription, inpatient, or labs)
+      const dueType = type || (dueRecord.type as string) || 'prescription'
+      console.log(`Updating due of type: ${dueType} with ID: ${id} to amount: ${updatedAmount}`)
 
-      // If marking as paid (updatedAmount = 0), set amountReceived to totalAmount
-      const amountReceived =
-        updatedAmount === 0
-          ? totalAmount
-          : Number(prescription.amountReceived || prescription['AMOUNT RECEIVED'] || 0)
-
-      // Update both amountDue and amountReceived fields
-      const updatedPrescription = {
-        ...prescription,
-        amountDue: updatedAmount,
-        'AMOUNT DUE': updatedAmount,
-        amountReceived: amountReceived,
-        'AMOUNT RECEIVED': amountReceived // Update both formats for compatibility
-      }
-
-      // Call the API to update the prescription
-      const response = await window.api.updatePrescription(id, updatedPrescription)
+      // Use the unified updateDue handler for all due types
+      const response = await window.api.updateDue(id, dueType, updatedAmount, receivedAmount)
 
       // Check if response has standardized format
       if (response && typeof response === 'object' && 'success' in response) {
-        const standardizedResponse = response as unknown as StandardizedResponse<Prescription>
+        const standardizedResponse = response as unknown as StandardizedResponse<unknown>
         if (!standardizedResponse.success) {
           throw new Error(standardizedResponse.message || 'Update failed')
         }
@@ -339,6 +247,23 @@ const DuesFollowUp: React.FC = () => {
             <h1 className="text-2xl font-medium text-gray-800">Dues & Follow-Up</h1>
             <p className="text-sm text-gray-500">Sri Harshini Eye Hospital</p>
           </div>
+
+          {/* OP/IP Toggle Switch */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setActiveTab('dues')}
+              className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'dues' ? 'bg-white shadow-sm text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-200'}`}
+            >
+              Dues
+            </button>
+            <button
+              onClick={() => setActiveTab('followup')}
+              className={`px-4 py-2 rounded-md transition-colors ${activeTab === 'followup' ? 'bg-white shadow-sm text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-200'}`}
+            >
+              Follow-Up
+            </button>
+          </div>
+
           <div className="flex items-center space-x-3">
             <button
               onClick={() => (window.location.hash = '/dashboard')}
@@ -381,34 +306,6 @@ const DuesFollowUp: React.FC = () => {
           </div>
         )}
 
-        {/* Tab Navigation */}
-        <div className="mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
-              <button
-                onClick={() => setActiveTab('dues')}
-                className={`py-4 px-1 border-b-2 cursor-pointer font-medium text-sm ${
-                  activeTab === 'dues'
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Dues
-              </button>
-              <button
-                onClick={() => setActiveTab('followup')}
-                className={`py-4 px-1 border-b-2 cursor-pointer font-medium text-sm ${
-                  activeTab === 'followup'
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Follow-Up
-              </button>
-            </nav>
-          </div>
-        </div>
-
         {/* Content based on active tab */}
         {activeTab === 'dues' ? (
           <DuesSection
@@ -418,8 +315,15 @@ const DuesFollowUp: React.FC = () => {
           />
         ) : (
           <FollowUpSection
-            operations={operations}
-            prescriptions={followUpPrescriptions}
+            prescriptions={followUpPrescriptions.map((item) => {
+              // Ensure each item has a type field
+              if (!item.type) {
+                // Create a new object with all properties from item plus the type property
+                const itemWithType = Object.assign({}, item, { type: 'prescription' as const })
+                return itemWithType
+              }
+              return item
+            })}
             loading={loading}
           />
         )}

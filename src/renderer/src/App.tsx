@@ -14,6 +14,7 @@ import Staff from './pages/Staff'
 import Labs from './pages/Labs'
 import CertificateGenerator from './components/certificates/CertificateGenerator'
 import ActiveInPatients from './pages/ActiveInPatients'
+import Expenses from './pages/Expenses'
 
 function App(): React.JSX.Element {
   const [route, setRoute] = useState<string>('/login')
@@ -69,6 +70,8 @@ function App(): React.JSX.Element {
         return <CertificateGenerator />
       case '/activeinpatients':
         return <ActiveInPatients />
+      case '/expenses':
+        return <Expenses />
       default:
         return <Login />
     }

@@ -18,6 +18,7 @@ interface ExtendedFormData extends Omit<InPatient, 'id'> {
   id?: string
   updatedBy?: string
   updatedAt?: string
+  opid?: string
   admissionDate: string
   operationDate: string
   paymentRecords: PaymentRecord[]
@@ -59,8 +60,9 @@ const InPatientForm: React.FC<InPatientFormProps> = ({
   }
 
   const [formData, setFormData] = useState<ExtendedFormData>({
-    date: initialValues?.date || String(new Date().toISOString().split('T')[0]),
+    date: initialValues?.date || format(toZonedTime(new Date(), 'Asia/Kolkata'), 'yyyy-MM-dd'),
     patientId: initialValues?.patientId || '',
+    opid: initialValues?.opid || '',
     name: initialValues?.name || '',
     age: initialValues?.age || '',
     gender: initialValues?.gender || '',
@@ -98,11 +100,7 @@ const InPatientForm: React.FC<InPatientFormProps> = ({
     ...(initialValues?.id ? { id: initialValues.id } : {})
   })
 
-  // Dynamic dropdown options state - fetched from backend
-  const [dynamicDoctorOptions, setDynamicDoctorOptions] = useState<string[]>([])
-  const [dynamicDepartmentOptions, setDynamicDepartmentOptions] = useState<string[]>([])
-  const [dynamicReferredByOptions, setDynamicReferredByOptions] = useState<string[]>([])
-  const [dynamicInclusionOptions, setDynamicInclusionOptions] = useState<string[]>([
+  const [dynamicInclusionOptions] = useState<string[]>([
     'Room Charges',
     'Medicine',
     'Consumables',
@@ -130,21 +128,6 @@ const InPatientForm: React.FC<InPatientFormProps> = ({
     'Bank Transfer',
     'Cash+UPI'
   ])
-
-  // Load dropdown options on component mount
-  useEffect(() => {
-    const loadDropdownOptions = async (): Promise<void> => {
-      const [doctorOpts, departmentOpts, referredByOpts] = await Promise.all([
-        fetchDropdownOptions('doctorName'),
-        fetchDropdownOptions('department'),
-        fetchDropdownOptions('referredBy')
-      ])
-      setDynamicDoctorOptions(doctorOpts)
-      setDynamicDepartmentOptions(departmentOpts)
-      setDynamicReferredByOptions(referredByOpts)
-    }
-    loadDropdownOptions()
-  }, [])
 
   // Function to fetch the latest patient ID and generate the next one
   const fetchLatestPatientId = useCallback(
@@ -190,77 +173,6 @@ const InPatientForm: React.FC<InPatientFormProps> = ({
   useEffect(() => {
     fetchLatestPatientId()
   }, [fetchLatestPatientId])
-
-  // Helper function to fetch dropdown options from backend
-  const fetchDropdownOptions = async (fieldName: string): Promise<string[]> => {
-    try {
-      const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
-      const response = (await api.getDropdownOptions(fieldName)) as StandardizedResponse<string[]>
-
-      if (response.success && response.data) {
-        return response.data
-      } else {
-        // Fallback to default options if API call fails
-        switch (fieldName) {
-          case 'doctorName':
-            return doctorOptions
-          case 'department':
-            return departmentOptions
-          case 'referredBy':
-            return referredByOptions
-          default:
-            return []
-        }
-      }
-    } catch (error) {
-      console.error(`Error fetching ${fieldName} options:`, error)
-      // Fallback to default options if API call fails
-      switch (fieldName) {
-        case 'doctorName':
-          return doctorOptions
-        case 'department':
-          return departmentOptions
-        case 'referredBy':
-          return referredByOptions
-        default:
-          return []
-      }
-    }
-  }
-
-  // Helper function to add new option permanently and refresh options
-  const addNewOptionPermanently = async (fieldName: string, value: string): Promise<void> => {
-    try {
-      const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
-      const response = (await api.addDropdownOption(fieldName, value)) as StandardizedResponse<{
-        success: boolean
-      }>
-
-      if (response.success) {
-        // Update the local state with the new option
-        switch (fieldName) {
-          case 'doctorName':
-            setDynamicDoctorOptions((prev) => [...prev, value])
-            break
-          case 'department':
-            setDynamicDepartmentOptions((prev) => [...prev, value])
-            break
-          case 'referredBy':
-            setDynamicReferredByOptions((prev) => [...prev, value])
-            break
-          case 'packageInclusion':
-            setDynamicInclusionOptions((prev) => [...prev, value])
-            break
-          default:
-            break
-        }
-      } else {
-        console.error(`Failed to add ${fieldName} option:`, response.message)
-      }
-    } catch (error) {
-      console.error(`Error adding ${fieldName} option:`, error)
-    }
-  }
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -604,6 +516,7 @@ const InPatientForm: React.FC<InPatientFormProps> = ({
           ...prev,
           name: patientData.name || patientData.NAME || '',
           age: patientData.age || patientData.AGE || '',
+          opid: patientData.patientId || patientData['patientId'] || '',
           gender: patientData.gender || patientData.GENDER || '',
           phone: patientData.phone || patientData.PHONE || patientData['MOBILE NUMBER'] || '',
           address: patientData.address || patientData.ADDRESS || '',
@@ -668,7 +581,7 @@ const InPatientForm: React.FC<InPatientFormProps> = ({
   // Helper function to reset the form
   const resetForm = (): void => {
     setFormData({
-      date: String(new Date().toISOString().split('T')[0]),
+      date: format(toZonedTime(new Date(), 'Asia/Kolkata'), 'yyyy-MM-dd'),
       patientId: '',
       name: '',
       age: '',
@@ -934,9 +847,8 @@ const InPatientForm: React.FC<InPatientFormProps> = ({
               id="department"
               name="department"
               value={formData.department}
-              options={dynamicDepartmentOptions}
+              options={departmentOptions}
               onChange={handleChange}
-              onAddNewOption={(value) => addNewOptionPermanently('department', value)}
               placeholder="Select or type department..."
               className="bg-white"
               required
@@ -951,9 +863,8 @@ const InPatientForm: React.FC<InPatientFormProps> = ({
                   id={`doctor-${index}`}
                   name={`doctor-${index}`}
                   value={doctor}
-                  options={dynamicDoctorOptions}
+                  options={doctorOptions}
                   onChange={(e) => handleDoctorChange(index, e.target.value)}
-                  onAddNewOption={(value) => addNewOptionPermanently('doctorName', value)}
                   placeholder="Select or type doctor name..."
                   className="bg-white flex-grow"
                   required
@@ -1012,9 +923,8 @@ const InPatientForm: React.FC<InPatientFormProps> = ({
               id="onDutyDoctor"
               name="onDutyDoctor"
               value={formData.onDutyDoctor}
-              options={dynamicDoctorOptions}
+              options={doctorOptions}
               onChange={handleChange}
-              onAddNewOption={(value) => addNewOptionPermanently('doctorName', value)}
               placeholder="Select or type on-duty doctor..."
               className="bg-white"
             />
@@ -1028,9 +938,8 @@ const InPatientForm: React.FC<InPatientFormProps> = ({
               id="referredBy"
               name="referredBy"
               value={formData.referredBy}
-              options={dynamicReferredByOptions}
+              options={referredByOptions}
               onChange={handleChange}
-              onAddNewOption={(value) => addNewOptionPermanently('referredBy', value)}
               placeholder="Select or type referrer..."
               className="bg-white"
             />
@@ -1068,7 +977,6 @@ const InPatientForm: React.FC<InPatientFormProps> = ({
                     value={inclusion.name}
                     options={dynamicInclusionOptions}
                     onChange={(e) => handleInclusionChange(index, 'name', e.target.value)}
-                    onAddNewOption={(value) => addNewOptionPermanently('packageInclusion', value)}
                     placeholder="Select or type inclusion..."
                     className="bg-white"
                   />

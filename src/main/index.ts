@@ -946,26 +946,61 @@ ipcMain.handle('getTodaysPatients', async () => {
   }
 })
 
-// Get all patients
-ipcMain.handle('getPatients', async () => {
+// Get patients with pagination
+ipcMain.handle('getPatients', async (_, page = 1, pageSize = 10) => {
   try {
-    // Fetch all patients from Supabase
+    // Convert parameters to numbers and ensure they're valid
+    const pageNum = Number(page)
+    const pageSizeNum = Number(pageSize)
+
+    // Calculate range for pagination
+    const from = (pageNum - 1) * pageSizeNum
+    const to = from + pageSizeNum - 1
+
+    // Get total count first
+    const { count, error: countError } = await supabase
+      .from('patients')
+      .select('*', { count: 'exact', head: true })
+
+    if (countError) {
+      throw new Error(`Supabase count error: ${countError.message}`)
+    }
+
+    // Then get paginated data
     const { data: patients, error } = await supabase
       .from('patients')
       .select('*')
       .order('date', { ascending: false })
+      .range(from, to)
 
     if (error) {
       throw new Error(`Supabase error: ${error.message}`)
     }
 
-    console.log('Patients fetched from Supabase successfully')
-    return { success: true, data: patients || [], message: 'Patients fetched successfully' }
+    const totalCount = count || 0
+    const totalPages = Math.ceil(totalCount / pageSizeNum)
+
+    console.log(
+      `Patients page ${page} fetched from Supabase successfully (${patients?.length || 0} records)`
+    )
+    return {
+      success: true,
+      data: patients || [],
+      totalCount,
+      page: pageNum,
+      pageSize: pageSizeNum,
+      totalPages,
+      message: 'Patients fetched successfully'
+    }
   } catch (error) {
     console.error('Error getting patients from Supabase:', error)
     return {
       success: false,
       data: [],
+      totalCount: 0,
+      page,
+      pageSize,
+      totalPages: 0,
       message: `Failed to fetch patients: ${error instanceof Error ? error.message : 'Unknown error'}`
     }
   }
@@ -1499,24 +1534,53 @@ ipcMain.handle('deletePatient', async (_, id) => {
   }
 })
 
-// Get all prescriptions and receipts
-ipcMain.handle('getPrescriptions', async () => {
+// Get all prescriptions and receipts with pagination
+ipcMain.handle('getPrescriptions', async (_, page = 1, pageSize = 10) => {
   try {
-    // Fetch all prescriptions from Supabase
+    // Convert parameters to numbers and ensure they're valid
+    const pageNum = Number(page)
+    const pageSizeNum = Number(pageSize)
+
+    // Calculate range for pagination
+    const from = (pageNum - 1) * pageSizeNum
+    const to = from + pageSizeNum - 1
+
+    // Get total count first
+    const { count, error: countError } = await supabase
+      .from('prescriptions')
+      .select('*', { count: 'exact', head: true })
+
+    if (countError) {
+      throw new Error(`Supabase count error: ${countError.message}`)
+    }
+
+    // Fetch prescriptions with pagination
     const { data: prescriptions, error } = await supabase
       .from('prescriptions')
       .select('*')
       .order('DATE', { ascending: false })
+      .range(from, to)
 
     if (error) {
       throw new Error(`Supabase error: ${error.message}`)
     }
 
-    console.log('Prescriptions fetched from Supabase successfully')
-    return prescriptions || []
+    // Return standardized response format
+    return {
+      success: true,
+      data: prescriptions || [],
+      totalCount: count || 0,
+      page: pageNum,
+      pageSize: pageSizeNum,
+      totalPages: Math.ceil((count || 0) / pageSizeNum)
+    }
   } catch (error) {
     console.error('Error getting prescriptions from Supabase:', error)
-    return false
+    return {
+      success: false,
+      data: [],
+      message: `Failed to fetch prescriptions: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }
   }
 })
 
@@ -1573,6 +1637,38 @@ ipcMain.handle('getPrescriptionsByPatientId', async (_, patientId) => {
     }
   } catch (error) {
     console.error(`Error getting prescriptions for patient ${patientId}:`, error)
+    return {
+      success: false,
+      data: [],
+      message: `Failed to fetch prescriptions: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }
+  }
+})
+
+// Get prescriptions by patient ID
+ipcMain.handle('getPrescriptionsById', async (_, id) => {
+  try {
+    // Fetch prescriptions for the specific patient from Supabase
+    const { data: prescriptions, error } = await supabase
+      .from('prescriptions')
+      .select('*')
+      .eq('id', id)
+
+    if (error) {
+      throw new Error(`Supabase error: ${error.message}`)
+    }
+
+    console.log(`Prescriptions for id ${id} fetched successfully`)
+    return {
+      success: true,
+      data: prescriptions || [],
+      message:
+        prescriptions && prescriptions.length > 0
+          ? `Found ${prescriptions.length} prescriptions for patient`
+          : 'No prescriptions found for this patient'
+    }
+  } catch (error) {
+    console.error(`Error getting prescriptions for id ${id}:`, error)
     return {
       success: false,
       data: [],
@@ -3514,9 +3610,19 @@ async function generateAnalyticsData(
         revenue: [] as number[],
         medicines: [] as number[],
         opticals: [] as number[]
-      } as TimeSeriesData
+      } as TimeSeriesData,
+      totalExpenses: 0,
+      conversionRate: 0,
+      patientwithsurgery: 0,
+      convertedPatientsCount: 0
     }
 
+    // Array to track patients with surgery mentioned in notes
+    const patientswithsurgery: Array<{
+      id: string
+      date: string
+      [key: string]: unknown
+    }> = []
     // Get patients data - try Supabase first, fallback to Excel
     let patients: Array<{
       id: string
@@ -3662,6 +3768,7 @@ async function generateAnalyticsData(
           'TOTAL AMOUNT': number
           'AMOUNT DUE': number
           'PRESENT COMPLAIN': string
+          NOTES: string
           [key: string]: unknown
         }>
         console.log('Prescriptions data fetched from Supabase for analytics')
@@ -3694,6 +3801,14 @@ async function generateAnalyticsData(
         const amount = Number(prescription['AMOUNT RECEIVED']) || 0
         const dueamount = Number(prescription['AMOUNT DUE']) || 0
         analyticsData.revenueStats.total += amount
+
+        if ((prescription['NOTES'] as string).toLowerCase().includes('surgery')) {
+          patientswithsurgery.push({
+            id: prescription['PATIENT ID'],
+            date: prescription['DATE']
+          })
+        }
+
         if (prescription['AMOUNT RECEIVED'] > 0) {
           analyticsData.revenueStats.consultations += amount
         }
@@ -3861,50 +3976,6 @@ async function generateAnalyticsData(
         }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 5)
-
-      // Get current medicine stock status
-      if (fs.existsSync(medicinesFilePath)) {
-        // Field names from Excel: name, quantity, expiryDate, batchNumber, price, status, id
-        const medicineWorkbook = XLSX.readFile(medicinesFilePath)
-        const medicineSheetName = medicineWorkbook.SheetNames[0]
-        const medicineWorksheet = medicineWorkbook.Sheets[medicineSheetName]
-        const medicines: Array<{
-          name: string
-          quantity: number
-          expiryDate: string
-          batchNumber: string
-          price: number
-          status: string
-          id: string
-          [key: string]: unknown
-        }> = XLSX.utils.sheet_to_json(medicineWorksheet)
-
-        // Update medicine stats based on Excel data
-        analyticsData.medicineStats.outOfStock = medicines.filter(
-          (m) => m.status === 'out_of_stock'
-        ).length
-        analyticsData.medicineStats.lowStock = medicines.filter(
-          (m) => m.quantity && Number(m.quantity) < 10 && m.status !== 'out_of_stock'
-        ).length
-
-        // Update dispensed count for OverviewDashboard
-        analyticsData.medicineStats.dispensed = analyticsData.medicineStats.totalDispensed
-
-        // Create topItems for OverviewDashboard
-        analyticsData.medicineStats.topItems = analyticsData.medicineStats.topMedicines.map(
-          (medicine) => ({
-            name: medicine.name,
-            quantity: medicine.quantity || 0,
-            revenue: Math.round(
-              (medicine.quantity || 0) *
-                (medicines.find((m) => m.name === medicine.name)?.price || 100)
-            ),
-            percentage: Math.round(
-              ((medicine.quantity || 0) / (analyticsData.medicineStats.totalDispensed || 1)) * 100
-            )
-          })
-        )
-      }
     }
 
     // Get optical dispense records - try Supabase first, fallback to Excel
@@ -4121,6 +4192,10 @@ async function generateAnalyticsData(
             inpatient.followUpDate && new Date(inpatient.followUpDate) > new Date(today)
         ).length
       )
+      analyticsData.revenueStats.pending = filteredInpatients.reduce(
+        (total, inpatient) => total + (Number(inpatient.balanceAmount) || 0),
+        0
+      )
 
       // Calculate peak hours based on admission times or use simulated data if time not available
       const hourCounts = new Array(24).fill(0)
@@ -4149,10 +4224,64 @@ async function generateAnalyticsData(
       ).length
       const totalOps = filteredInpatients.length
 
+      // Calculate conversion rate (patients with surgery in notes who became inpatients)
+      const patientsWithSurgeryCount = patientswithsurgery.length
+      let convertedPatientsCount = 0
+
+      if (patientsWithSurgeryCount > 0) {
+        // Count how many patients with surgery in notes became inpatients
+        convertedPatientsCount = patientswithsurgery.filter((patient) => {
+          // Check if this patient exists in inpatients (by matching patient ID with patientId)
+          return filteredInpatients.some((inpatient) => inpatient.opid === patient.id)
+        }).length
+        analyticsData.convertedPatientsCount = convertedPatientsCount
+        analyticsData.patientwithsurgery = patientsWithSurgeryCount
+
+        // Calculate and store the conversion rate as a percentage
+        analyticsData.conversionRate = Math.round(
+          (convertedPatientsCount / patientsWithSurgeryCount) * 100
+        )
+        console.log(
+          `Conversion rate: ${analyticsData.conversionRate}% (${convertedPatientsCount}/${patientsWithSurgeryCount})`
+        )
+      }
+
       analyticsData.eyeConditionStats.treatmentSuccess =
         totalOps > 0
           ? Math.round((completedOps / totalOps) * 100)
           : Math.round(90 + Math.random() * 10) // Fallback to 90-100% if no data
+    }
+
+    let expenses: Array<{
+      date: string
+      amount: number
+    }> = []
+
+    try {
+      const { data: supabaseExpenses, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .gte('date', start.toISOString().split('T')[0])
+        .lte('date', end.toISOString().split('T')[0])
+        .order('date', { ascending: false })
+
+      if (error) {
+        throw new Error(`Supabase error: ${error.message}`)
+      }
+
+      if (supabaseExpenses && supabaseExpenses.length > 0) {
+        expenses = supabaseExpenses as Array<{
+          date: string
+          amount: number
+          [key: string]: unknown
+        }>
+        analyticsData.totalExpenses = expenses.reduce((total, expense) => total + expense.amount, 0)
+        console.log('Expenses data fetched from Supabase for analytics')
+      } else {
+        throw new Error('No expenses data from Supabase')
+      }
+    } catch (supabaseError) {
+      console.error('Error getting expenses from Supabase for analytics:', supabaseError)
     }
 
     // Get lab records - try Supabase first, fallback to Excel
@@ -4211,19 +4340,18 @@ async function generateAnalyticsData(
       // Calculate revenue from labs
       filteredLabRecords.forEach((record) => {
         const amount = Number(record['AMOUNT RECEIVED']) || 0
-        const labType = (record['type'] || '').toString().toLowerCase()
+        // const labType = (record['type'] || '').toString().toLowerCase()
         const vamount = Number(record['VAMOUNT RECEIVED']) || 0
 
-        // Add to total revenue
-        analyticsData.revenueStats.total += amount
+        analyticsData.revenueStats.pending += Number(record['AMOUNT DUE']) || 0
 
-        // Categorize by lab type
-        if (labType === 'vannela') {
-          analyticsData.revenueStats.vlabs += vamount
-        } else {
-          // Default to regular lab if not specified or any other type
-          analyticsData.revenueStats.labs += amount
-        }
+        analyticsData.revenueStats.pending += Number(record['VAMOUNT DUE']) || 0
+
+        // Add to total revenue
+        analyticsData.revenueStats.total += amount + vamount
+        analyticsData.revenueStats.vlabs += vamount
+        // Default to regular lab if not specified or any other type
+        analyticsData.revenueStats.labs += amount
       })
     }
     // Generate time series data from actual records
@@ -5031,6 +5159,548 @@ ipcMain.handle('searchLabs', async (_, patientId: string) => {
     return {
       success: false,
       data: [],
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      statusCode: 500
+    }
+  }
+})
+
+// Get dues from prescriptions, inpatients, and labs tables
+ipcMain.handle('getdues', async () => {
+  try {
+    // Get dues from prescriptions table
+    const { data: prescriptionDues, error: prescriptionError } = await supabase
+      .from('prescriptions')
+      .select('*')
+      .gt('AMOUNT DUE', 0)
+
+    // Get dues from inpatients table
+    const { data: inpatientDues, error: inpatientError } = await supabase
+      .from('inpatients')
+      .select('*')
+      .gt('balanceAmount', 0)
+
+    // Get dues from labs table - checking both possible field names
+    const { data: labDuesAmountDue, error: labErrorAmountDue } = await supabase
+      .from('labs')
+      .select('*')
+      .gt('AMOUNT DUE', 0)
+
+    const { data: labDuesVmountDue, error: labErrorVmountDue } = await supabase
+      .from('labs')
+      .select('*')
+      .gt('VAMOUNT DUE', 0)
+
+    // Check for errors
+    if (prescriptionError) {
+      console.error('Error fetching prescription dues:', prescriptionError)
+    }
+    if (inpatientError) {
+      console.error('Error fetching inpatient dues:', inpatientError)
+    }
+    if (labErrorAmountDue) {
+      console.error('Error fetching lab dues (AMOUNT DUE):', labErrorAmountDue)
+    }
+    if (labErrorVmountDue) {
+      console.error('Error fetching lab dues (VMOUNT DUE):', labErrorVmountDue)
+    }
+
+    const labDues = labDuesAmountDue
+      ? labDuesAmountDue.map((lab) => ({ ...lab, type: 'labs' }))
+      : []
+
+    const vlabDues = labDuesVmountDue
+      ? labDuesVmountDue.map((lab) => ({ ...lab, type: 'vlabs' }))
+      : []
+
+    // Add type field to each record
+    const prescriptionDuesWithType = prescriptionDues
+      ? prescriptionDues.map((item) => ({ ...item, type: 'prescription' }))
+      : []
+    const inpatientDuesWithType = inpatientDues
+      ? inpatientDues.map((item) => ({ ...item, type: 'inpatient' }))
+      : []
+
+    // Combine all dues into a single array
+    const allDues = [...prescriptionDuesWithType, ...inpatientDuesWithType, ...labDues, ...vlabDues]
+
+    console.log(
+      `Found ${prescriptionDuesWithType.length} prescription dues, ${inpatientDuesWithType.length} inpatient dues, and ${labDues.length} lab dues ${vlabDues.length} vlab dues`
+    )
+
+    return {
+      success: true,
+      data: allDues,
+      error: null,
+      statusCode: 200
+    }
+  } catch (error) {
+    console.error('Error fetching dues:', error)
+    return {
+      success: false,
+      data: [],
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      statusCode: 500
+    }
+  }
+})
+
+// Update due amount
+ipcMain.handle('updateDue', async (_, id, type, updatedAmount, receivedAmount) => {
+  try {
+    console.log(
+      `Updating due of type ${type} with ID ${id} to amount ${updatedAmount} and received amount ${receivedAmount}`
+    )
+
+    switch (type) {
+      case 'prescription': {
+        const { data: prescriptionData, error: prescriptionError } = await supabase
+          .from('prescriptions')
+          .update({ 'AMOUNT DUE': updatedAmount, 'AMOUNT RECEIVED': receivedAmount })
+          .eq('id', id)
+          .select()
+
+        if (prescriptionError) {
+          console.error('Error updating prescription due:', prescriptionError)
+          return {
+            success: false,
+            data: null,
+            error:
+              prescriptionError instanceof Error
+                ? prescriptionError.message
+                : 'Unknown error occurred',
+            statusCode: 500
+          }
+        }
+        return {
+          success: true,
+          data: prescriptionData[0],
+          error: null,
+          statusCode: 200
+        }
+      }
+      case 'inpatient': {
+        const { data: inpatientData, error: inpatientError } = await supabase
+          .from('inpatients')
+          .update({ balanceAmount: updatedAmount, totalReceivedAmount: receivedAmount })
+          .eq('id', id)
+          .select()
+
+        if (inpatientError) {
+          console.error('Error updating inpatient due:', inpatientError)
+          return {
+            success: false,
+            data: null,
+            error:
+              inpatientError instanceof Error ? inpatientError.message : 'Unknown error occurred',
+            statusCode: 500
+          }
+        }
+        return {
+          success: true,
+          data: inpatientData[0],
+          error: null,
+          statusCode: 200
+        }
+      }
+      case 'vlabs': {
+        const { data: labData, error: labError } = await supabase
+          .from('labs')
+          .update({ 'VAMOUNT DUE': updatedAmount, 'VAMOUNT RECEIVED': receivedAmount })
+          .eq('id', id)
+          .select()
+
+        if (labError) {
+          console.error('Error updating lab due:', labError)
+          return {
+            success: false,
+            data: null,
+            error: labError instanceof Error ? labError.message : 'Unknown error occurred',
+            statusCode: 500
+          }
+        }
+        return {
+          success: true,
+          data: labData[0],
+          error: null,
+          statusCode: 200
+        }
+      }
+      case 'labs': {
+        const { data: labData, error: labError } = await supabase
+          .from('labs')
+          .update({ 'AMOUNT DUE': updatedAmount, 'AMOUNT RECEIVED': receivedAmount })
+          .eq('id', id)
+          .select()
+
+        if (labError) {
+          console.error('Error updating lab due:', labError)
+          return {
+            success: false,
+            data: null,
+            error: labError instanceof Error ? labError.message : 'Unknown error occurred',
+            statusCode: 500
+          }
+        }
+        return {
+          success: true,
+          data: labData[0],
+          error: null,
+          statusCode: 200
+        }
+      }
+      default:
+        throw new Error(`Unknown due type: ${type}`)
+    }
+  } catch (error) {
+    console.error('Error updating due:', error)
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      statusCode: 500
+    }
+  }
+})
+
+ipcMain.handle('getFollowUps', async () => {
+  try {
+    // Generate dates for yesterday, today and the next 4 days (6 days total)
+    const followUpDates: string[] = []
+
+    // Add yesterday's date
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    followUpDates.push(yesterday.toISOString().split('T')[0])
+
+    // Add today and next 4 days
+    for (let i = 0; i < 5; i++) {
+      const date = new Date()
+      date.setDate(date.getDate() + i)
+      followUpDates.push(date.toISOString().split('T')[0])
+    }
+
+    console.log('Looking for follow-ups with dates:', followUpDates)
+
+    // Fetch prescriptions with follow-up dates in the range
+    const { data: prescriptionData, error: prescriptionError } = await supabase
+      .from('prescriptions')
+      .select('*')
+      .in('FOLLOW UP DATE', followUpDates)
+      .order('FOLLOW UP DATE', { ascending: true })
+
+    // Fetch inpatients with follow-up dates in the range
+    const { data: inpatientData, error: inpatientError } = await supabase
+      .from('inpatients')
+      .select('*')
+      .in('followUpDate', followUpDates)
+      .order('followUpDate', { ascending: true })
+
+    // Check for errors
+    if (prescriptionError) {
+      console.error('Error fetching prescription follow-ups:', prescriptionError)
+    }
+
+    if (inpatientError) {
+      console.error('Error fetching inpatient follow-ups:', inpatientError)
+    }
+
+    // Add type field to each record
+    const prescriptionFollowUps = prescriptionData
+      ? prescriptionData.map((prescription) => ({ ...prescription, type: 'prescription' }))
+      : []
+
+    const inpatientFollowUps = inpatientData
+      ? inpatientData.map((inpatient) => ({ ...inpatient, type: 'inpatient' }))
+      : []
+
+    // Combine all follow-ups into a single array
+    const allFollowUps = [...prescriptionFollowUps, ...inpatientFollowUps]
+
+    console.log(
+      `Found ${prescriptionFollowUps.length} prescription follow-ups and ${inpatientFollowUps.length} inpatient follow-ups`
+    )
+
+    return {
+      success: true,
+      data: allFollowUps,
+      error: null,
+      statusCode: 200
+    }
+  } catch (error) {
+    console.error('Error fetching follow-ups:', error)
+    return {
+      success: false,
+      data: [],
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      statusCode: 500
+    }
+  }
+})
+
+//reports
+
+ipcMain.handle('getReports', async (_, id) => {
+  console.log('Searching for reports with ID:', id)
+  try {
+    const { data: reports, error } = await supabase
+      .from('prescriptions')
+      .select('*')
+      .eq('PATIENT ID', id)
+    const { data: inpatients } = await supabase.from('inpatients').select('*').eq('opid', id)
+    const { data: labs } = await supabase.from('labs').select('*').eq('PATIENT ID', id)
+
+    if (!error && reports) {
+      console.log('Reports fetched from Supabase successfully')
+      return {
+        success: true,
+        data: { reports, inpatients, labs },
+        error: null,
+        statusCode: 200
+      }
+    }
+    return {
+      success: false,
+      data: [],
+      error: error?.message || 'Failed to fetch reports',
+      statusCode: 400
+    }
+  } catch (error) {
+    console.error('Error getting reports:', error)
+    return {
+      success: false,
+      data: [],
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      statusCode: 500
+    }
+  }
+})
+
+// Expenses Module Backend Functions
+
+// Get all expenses
+ipcMain.handle('getExpenses', async () => {
+  console.log('Fetching all expenses')
+  try {
+    const { data: expenses, error } = await supabase
+      .from('expenses')
+      .select('*')
+      .order('date', { ascending: false })
+
+    if (!error && expenses) {
+      console.log('Expenses fetched from Supabase successfully')
+      return {
+        success: true,
+        data: expenses,
+        error: null,
+        statusCode: 200
+      }
+    }
+    return {
+      success: false,
+      data: [],
+      error: error?.message || 'Failed to fetch expenses',
+      statusCode: 400
+    }
+  } catch (error) {
+    console.error('Error getting expenses:', error)
+    return {
+      success: false,
+      data: [],
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      statusCode: 500
+    }
+  }
+})
+
+// Get expenses by date range
+ipcMain.handle('getExpensesByDateRange', async (_, { startDate, endDate }) => {
+  console.log(`Fetching expenses from ${startDate} to ${endDate}`)
+  try {
+    let query = supabase.from('expenses').select('*')
+    if (startDate) {
+      query = query.gte('date', startDate)
+    }
+    if (endDate) {
+      query = query.lte('date', endDate)
+    }
+
+    const { data: expenses, error } = await query.order('date', { ascending: false })
+
+    if (!error && expenses) {
+      console.log('Expenses by date range fetched successfully')
+      return {
+        success: true,
+        data: expenses,
+        error: null,
+        statusCode: 200
+      }
+    }
+    return {
+      success: false,
+      data: [],
+      error: error?.message || 'Failed to fetch expenses by date range',
+      statusCode: 400
+    }
+  } catch (error) {
+    console.error('Error getting expenses by date range:', error)
+    return {
+      success: false,
+      data: [],
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      statusCode: 500
+    }
+  }
+})
+
+// Get expenses by category
+ipcMain.handle('getExpensesByCategory', async (_, category) => {
+  console.log(`Fetching expenses for category: ${category}`)
+  try {
+    const { data: expenses, error } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('category', category)
+      .order('date', { ascending: false })
+
+    if (!error && expenses) {
+      console.log('Expenses by category fetched successfully')
+      return {
+        success: true,
+        data: expenses,
+        error: null,
+        statusCode: 200
+      }
+    }
+    return {
+      success: false,
+      data: [],
+      error: error?.message || 'Failed to fetch expenses by category',
+      statusCode: 400
+    }
+  } catch (error) {
+    console.error('Error getting expenses by category:', error)
+    return {
+      success: false,
+      data: [],
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      statusCode: 500
+    }
+  }
+})
+
+// Add a new expense
+ipcMain.handle('addExpense', async (_, expenseData) => {
+  console.log('Adding new expense:', expenseData)
+  try {
+    const { data: expense, error } = await supabase
+      .from('expenses')
+      .insert([
+        {
+          title: expenseData.title,
+          amount: parseFloat(expenseData.amount),
+          category: expenseData.category,
+          reason: expenseData.reason || null,
+          date: expenseData.date
+        }
+      ])
+      .select()
+
+    if (!error && expense) {
+      console.log('Expense added successfully')
+      return {
+        success: true,
+        data: expense[0],
+        error: null,
+        statusCode: 201
+      }
+    }
+    return {
+      success: false,
+      data: null,
+      error: error?.message || 'Failed to add expense',
+      statusCode: 400
+    }
+  } catch (error) {
+    console.error('Error adding expense:', error)
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      statusCode: 500
+    }
+  }
+})
+
+// Update an existing expense
+ipcMain.handle('updateExpense', async (_, data) => {
+  console.log(`Updating expense with ID: ${data.data.id}`, data)
+  try {
+    const { data: expense, error } = await supabase
+      .from('expenses')
+      .update({
+        title: data.data.title,
+        amount: parseFloat(data.data.amount),
+        category: data.data.category,
+        reason: data.data.reason || null,
+        date: data.data.date,
+        updatedAt: new Date().toISOString()
+      })
+      .eq('id', data.data.id)
+      .select()
+
+    if (!error && expense) {
+      console.log('Expense updated successfully')
+      return {
+        success: true,
+        data: expense[0],
+        error: null,
+        statusCode: 200
+      }
+    }
+    return {
+      success: false,
+      data: null,
+      error: error?.message || 'Failed to update expense',
+      statusCode: 400
+    }
+  } catch (error) {
+    console.error('Error updating expense:', error)
+    return {
+      success: false,
+      data: null,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      statusCode: 500
+    }
+  }
+})
+
+// Delete an expense
+ipcMain.handle('deleteExpense', async (_, id) => {
+  console.log(`Deleting expense with ID: ${id}`)
+  try {
+    const { error } = await supabase.from('expenses').delete().eq('id', id)
+
+    if (!error) {
+      console.log('Expense deleted successfully')
+      return {
+        success: true,
+        data: { id },
+        error: null,
+        statusCode: 200
+      }
+    }
+    return {
+      success: false,
+      data: null,
+      error: error?.message || 'Failed to delete expense',
+      statusCode: 400
+    }
+  } catch (error) {
+    console.error('Error deleting expense:', error)
+    return {
+      success: false,
+      data: null,
       error: error instanceof Error ? error.message : 'Unknown error occurred',
       statusCode: 500
     }

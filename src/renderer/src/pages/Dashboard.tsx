@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import DuesFollowUpSummary from '../components/duesFollowUp/DuesFollowUpSummary'
 import { StaffUser } from '../types/staff'
 
 const Dashboard = (): React.JSX.Element => {
@@ -152,34 +151,6 @@ const Dashboard = (): React.JSX.Element => {
             </div>
           )}
 
-          {/* Operations Card */}
-          {(user?.operations || user?.isAdmin) && (
-            <div
-              onClick={() => navigateTo('/operations')}
-              className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 hover:shadow-md cursor-pointer transition-all transform hover:-translate-y-1 hover:border-indigo-100"
-            >
-              <div className="flex items-center mb-4">
-                <div className="bg-indigo-100 p-3 rounded-full mr-4">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-8 w-8 text-indigo-600"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z"
-                      clipRule="evenodd"
-                    />
-                    <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900">Operations</h3>
-              </div>
-              <p className="text-gray-600 ml-16">Manage surgeries and operations</p>
-            </div>
-          )}
-
           {/* Medicines Card */}
           {(user?.medicines || user?.isAdmin) && (
             <div
@@ -262,9 +233,33 @@ const Dashboard = (): React.JSX.Element => {
             </div>
           )}
 
-          {/* Dues/Follow-Up Card */}
+          {/* Follow-Up Card */}
           {(user?.duesFollowUp || user?.isAdmin) && (
-            <DuesFollowUpSummary onClick={() => navigateTo('/dues-followup')} />
+            <div
+              onClick={() => navigateTo('/dues-followup')}
+              className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 hover:shadow-md cursor-pointer transition-all transform hover:-translate-y-1 hover:border-indigo-100"
+            >
+              <div className="flex items-center mb-4">
+                <div className="bg-indigo-100 p-3 rounded-full mr-4">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-8 w-8 text-indigo-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900">Dues/Follow-Up</h3>
+              </div>
+              <p className="text-gray-600 ml-16">View dues and follow-up appointments</p>
+            </div>
           )}
 
           {/* Data Management Card */}
@@ -320,6 +315,30 @@ const Dashboard = (): React.JSX.Element => {
               <p className="text-gray-600 ml-16">Manage lab tests and results</p>
             </div>
           )}
+
+          <div
+            onClick={() => navigateTo('/expenses')}
+            className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 hover:shadow-md cursor-pointer transition-all transform hover:-translate-y-1 hover:border-indigo-100"
+          >
+            <div className="flex items-center mb-4">
+              <div className="bg-indigo-100 p-3 rounded-full mr-4">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-8 w-8 text-indigo-600"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900">Expenses</h3>
+            </div>
+            <p className="text-gray-600 ml-16">Track and manage hospital expenses</p>
+          </div>
 
           {/* Analytics Card */}
           {(user?.analytics || user?.isAdmin) && (

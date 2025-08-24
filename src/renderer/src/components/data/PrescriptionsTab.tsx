@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { toast, Toaster } from 'sonner'
 
 interface Prescription {
@@ -151,10 +151,11 @@ const PrescriptionsTab: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
-  const [page, setPage] = useState(1)
-  const [hasMore, setHasMore] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  // Removed hasMore state as it's no longer needed with pagination
   const [sortField, setSortField] = useState<string>('date')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [totalPages, setTotalPages] = useState(1)
 
   // State for row actions
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null)
@@ -162,47 +163,86 @@ const PrescriptionsTab: React.FC = () => {
   const [actionPosition, setActionPosition] = useState({ top: 0, left: 0 })
 
   // Constants
-  const ITEMS_PER_PAGE = 20
+  const ITEMS_PER_PAGE = 10
 
-  // Refs
-  const observer = useRef<IntersectionObserver | null>(null)
-  const lastPrescriptionElementRef = useCallback(
-    (node: HTMLTableRowElement | null) => {
-      if (loading) return
-      if (observer.current) observer.current.disconnect()
-      observer.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && hasMore) {
-          setPage((prevPage) => prevPage + 1)
-        }
-      })
-      if (node) observer.current.observe(node)
-    },
-    [loading, hasMore]
-  )
+  // Handle page change
+  const handlePageChange = (pageNumber: number): void => {
+    setCurrentPage(pageNumber)
+    setLoading(true) // Show loading state while fetching new page
+  }
 
-  // Load prescriptions on component mount
-  useEffect(() => {
-    const fetchPrescriptions = async (): Promise<void> => {
-      try {
-        setLoading(true)
-        // Use type assertion for API calls with more specific types
-        const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
-        const data = await api.getPrescriptions()
-        setPrescriptions(data as Prescription[])
-        setError('')
-      } catch (err) {
-        console.error('Error loading prescriptions:', err)
-        setError('Failed to load prescriptions')
-      } finally {
-        setLoading(false)
+  // Fetch prescriptions when page changes
+  const fetchPrescriptions = async (pageNum: number): Promise<void> => {
+    try {
+      setLoading(true)
+      // Use type assertion for API calls with more specific types
+      const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
+      // Pass the current page and page size to the API
+      const response = await api.getPrescriptions(pageNum, ITEMS_PER_PAGE)
+
+      // Validate the data received from API
+      if (response === null || response === undefined) {
+        console.error('Received null or undefined response from API')
+        setPrescriptions([])
+        setError('No prescription data available')
+        return
       }
+
+      // Handle response object with data property
+      if (typeof response === 'object' && response !== null && 'data' in response) {
+        const { data, totalCount } = response as { data: Prescription[]; totalCount: number }
+
+        if (!Array.isArray(data)) {
+          console.error('Response data is not an array:', data)
+          setPrescriptions([])
+          setError('Invalid prescription data format')
+          return
+        }
+
+        setPrescriptions(data)
+        // Calculate total pages based on totalCount if available
+        if (typeof totalCount === 'number') {
+          setTotalPages(Math.ceil(totalCount / ITEMS_PER_PAGE))
+        }
+      } else if (Array.isArray(response)) {
+        // Handle direct array response
+        setPrescriptions(response as Prescription[])
+      } else {
+        console.error('Unexpected response format:', response)
+        setPrescriptions([])
+        setError('Invalid response format')
+        return
+      }
+      setError('')
+    } catch (err) {
+      console.error('Error loading prescriptions:', err)
+      setPrescriptions([])
+      setError('Failed to load prescriptions')
+    } finally {
+      setLoading(false)
+    }
+  }
+  // Load prescriptions when component mounts or page changes
+  useEffect(() => {
+    fetchPrescriptions(currentPage)
+  }, [currentPage])
+
+  // Filter and sort prescriptions when search term changes
+  useEffect(() => {
+    // If search term is empty, just use the server pagination
+    if (!searchTerm.trim()) {
+      setFilteredPrescriptions(prescriptions)
+      return
     }
 
-    fetchPrescriptions()
-  }, [])
+    // Ensure prescriptions is an array before filtering
+    if (!Array.isArray(prescriptions)) {
+      console.error('prescriptions is not an array:', prescriptions)
+      setFilteredPrescriptions([])
+      return
+    }
 
-  // Filter and sort prescriptions when search term or sort criteria changes
-  useEffect(() => {
+    // Client-side filtering when search term is provided
     const filtered = prescriptions.filter((prescription) => {
       const searchLower = searchTerm.toLowerCase()
       return (
@@ -214,32 +254,31 @@ const PrescriptionsTab: React.FC = () => {
 
     // Sort the filtered results
     const sorted = [...filtered].sort((a, b) => {
-      const fieldA = a[sortField]?.toString().toLowerCase() || ''
-      const fieldB = b[sortField]?.toString().toLowerCase() || ''
-      // Special handling for numeric fields
-      if (['totalAmount', 'amountReceived', 'amountDue'].includes(sortField)) {
-        const numA = parseFloat(fieldA) || 0
-        const numB = parseFloat(fieldB) || 0
-        return sortDirection === 'asc' ? numA - numB : numB - numA
-      }
-      // Special handling for date fields
       if (sortField === 'date') {
-        const dateA = new Date(fieldA).getTime() || 0
-        const dateB = new Date(fieldB).getTime() || 0
+        const dateA = new Date(a.date || '').getTime()
+        const dateB = new Date(b.date || '').getTime()
         return sortDirection === 'asc' ? dateA - dateB : dateB - dateA
+      } else if (sortField === 'patientName' || sortField === 'doctorName') {
+        const valueA = (a[sortField as keyof Prescription] as string) || ''
+        const valueB = (b[sortField as keyof Prescription] as string) || ''
+        return sortDirection === 'asc' ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA)
+      } else {
+        const valueA = a[sortField as keyof Prescription]
+        const valueB = b[sortField as keyof Prescription]
+        if (typeof valueA === 'number' && typeof valueB === 'number') {
+          return sortDirection === 'asc' ? valueA - valueB : valueB - valueA
+        }
+        return 0
       }
-      // Default string comparison
-      return sortDirection === 'asc' ? fieldA.localeCompare(fieldB) : fieldB.localeCompare(fieldA)
     })
 
     setFilteredPrescriptions(sorted)
-    setHasMore(sorted.length > page * ITEMS_PER_PAGE)
-  }, [prescriptions, searchTerm, sortField, sortDirection, page])
+  }, [prescriptions, searchTerm, sortField, sortDirection])
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     setSearchTerm(e.target.value)
-    setPage(1) // Reset to first page on new search
+    setCurrentPage(1) // Reset to first page on new search
   }
 
   // Handle sort column click
@@ -252,8 +291,8 @@ const PrescriptionsTab: React.FC = () => {
     }
   }
 
-  // Get the current page of prescriptions
-  const currentPagePrescriptions = filteredPrescriptions.slice(0, page * ITEMS_PER_PAGE)
+  // Use the filtered prescriptions directly when searching, otherwise use the server-paginated data
+  const currentPagePrescriptions = searchTerm.trim() ? filteredPrescriptions : prescriptions
 
   // Render sort indicator
   const renderSortIndicator = (field: string): string | null => {
@@ -730,14 +769,9 @@ const PrescriptionsTab: React.FC = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {currentPagePrescriptions.length > 0 ? (
-              currentPagePrescriptions.map((prescription, index) => (
+              currentPagePrescriptions.map((prescription) => (
                 <tr
                   key={prescription.id}
-                  ref={
-                    index === currentPagePrescriptions.length - 1
-                      ? lastPrescriptionElementRef
-                      : null
-                  }
                   className="hover:bg-gray-50 cursor-pointer"
                   onClick={(e) => handleRowClick(prescription, e)}
                 >
@@ -916,29 +950,57 @@ const PrescriptionsTab: React.FC = () => {
         </table>
       </div>
 
-      {/* Loading indicator at bottom */}
-      {loading && hasMore && (
-        <div className="flex justify-center py-4">
-          <svg
-            className="animate-spin h-5 w-5 text-indigo-500"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex justify-center mt-4 space-x-2">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className={`px-3 py-1 rounded-md ${
+              currentPage === 1
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+            }`}
           >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            ></circle>
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
+            Previous
+          </button>
+          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+            // Show pages around current page
+            let pageNum
+            if (totalPages <= 5) {
+              pageNum = i + 1
+            } else if (currentPage <= 3) {
+              pageNum = i + 1
+            } else if (currentPage >= totalPages - 2) {
+              pageNum = totalPages - 4 + i
+            } else {
+              pageNum = currentPage - 2 + i
+            }
+            return (
+              <button
+                key={pageNum}
+                onClick={() => handlePageChange(pageNum)}
+                className={`px-3 py-1 rounded-md ${
+                  currentPage === pageNum
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                }`}
+              >
+                {pageNum}
+              </button>
+            )
+          })}
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className={`px-3 py-1 rounded-md ${
+              currentPage === totalPages
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+            }`}
+          >
+            Next
+          </button>
         </div>
       )}
 

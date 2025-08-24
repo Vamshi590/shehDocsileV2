@@ -4,12 +4,14 @@ import DetailedGraphs from '../components/analytics/DetailedGraphs'
 import SmartSuggestions from '../components/analytics/SmartSuggestions'
 import MappingFilters from '../components/analytics/MappingFilters'
 import { AnalyticsData, MappingRegionData, MappingStaffMember } from '../types/analytics'
+import { format } from 'date-fns'
+import { toZonedTime } from 'date-fns-tz'
 
 const Analytics: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'trends' | 'suggestions' | 'reports'>(
     'overview'
   )
-  const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month' | 'custom'>('month')
+  const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month' | 'custom'>('today')
   const [customDateRange, setCustomDateRange] = useState<{ start: string; end: string }>({
     start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]
@@ -29,7 +31,7 @@ const Analytics: React.FC = () => {
         const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
 
         let startDate: string
-        let endDate = new Date().toISOString().split('T')[0] // Today
+        let endDate = format(toZonedTime(new Date(), 'Asia/Kolkata'), 'yyyy-MM-dd') // Today
 
         // Calculate start date based on time filter
         switch (timeFilter) {
@@ -58,7 +60,6 @@ const Analytics: React.FC = () => {
 
         // Fetch analytics data from API
         const data = (await api.getAnalyticsData(startDate, endDate)) as AnalyticsData
-        console.log(data)
         setAnalyticsData(data)
       } catch (err) {
         console.error('Error loading analytics data:', err)

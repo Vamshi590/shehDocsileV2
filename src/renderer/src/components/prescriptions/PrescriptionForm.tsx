@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { medicineOptions, adviceOptions, timingOptions } from '../../utils/dropdownOptions'
 import EditableCombobox from '../common/EditableCombobox'
+import { InPatient } from '../../pages/InPatients'
 
 // Define the Prescription type to match with other components
 type Prescription = {
@@ -25,6 +26,12 @@ type Patient = {
   ADDRESS: string
   [key: string]: unknown
 }
+// Define the ReportData type to hold all report types
+type ReportData = {
+  reports: Prescription[]
+  inpatients: InPatient[]
+  labs: Lab[]
+}
 
 // Extend window.api interface to include getPatients method
 declare global {
@@ -37,6 +44,7 @@ declare global {
       deletePrescription: (id: string) => Promise<void>
       searchPrescriptions: (searchTerm: string) => Promise<Prescription[]>
       getTodaysPrescriptions: () => Promise<Prescription[]>
+      getPrescriptionsById: (id: string) => Promise<Prescription[]>
       getLatestPrescriptionId: () => Promise<number>
       getPrescriptionsByPatientId: (patientId: string) => Promise<Prescription[]>
       getDropdownOptions: (fieldName: string) => Promise<string[]>
@@ -51,6 +59,19 @@ declare global {
       searchLabs: (patientId: string) => Promise<Lab[]>
       getTodaysLabs: () => Promise<Lab[]>
       getPrescriptionsByDate: (date: string) => Promise<Prescription[]>
+      getdues: () => Promise<Prescription[]>
+      updateDue: (
+        id: string,
+        type?: string,
+        updatedAmount?: number,
+        receivedAmount?: number
+      ) => Promise<Prescription>
+      getReports: (id: string) => Promise<{
+        success: boolean
+        data: ReportData
+        error: string | null
+        statusCode: number
+      }>
     }
   }
 }

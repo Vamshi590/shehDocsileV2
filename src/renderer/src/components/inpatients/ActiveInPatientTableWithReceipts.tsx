@@ -7,6 +7,7 @@ import { InPatient } from '../../pages/InPatients'
 import InPatientReceiptViewer from '../reports/InPatientReceiptViewer'
 import InPatientEditModal from './InPatientEditModal'
 import DischargeModal from './DischargeModal'
+import DischargeBack from '../reciepts/DischargeBack'
 
 // Define Discharge type to match InPatient structure for compatibility with ReceiptViewer
 type Discharge = InPatient
@@ -29,8 +30,9 @@ const ActiveInPatientTableWithReceipts: React.FC<ActiveInPatientTableWithReceipt
   const [isDischargeModalOpen, setIsDischargeModalOpen] = useState<boolean>(false)
   const [dischargePatient, setDischargePatient] = useState<InPatient | null>(null)
 
-  // Refs for both receipts
+  // Refs for receipts
   const dischargeSummaryRef = useRef<HTMLDivElement>(null)
+  const dischargeBackRef = useRef<HTMLDivElement>(null)
 
   // ===== Handlers =====
   const handleRowClick = (inpatient: InPatient): void => {
@@ -213,6 +215,46 @@ const ActiveInPatientTableWithReceipts: React.FC<ActiveInPatientTableWithReceipt
           width: dischargeSummaryDrawWidth,
           height: dischargeSummaryDrawHeight
         })
+
+        // Add discharge back as third page
+        if (dischargeBackRef.current) {
+          const dischargeBackEl = dischargeBackRef.current
+          const dischargeBackClone = dischargeBackEl.cloneNode(true) as HTMLElement
+          stripOKLCH(dischargeBackClone)
+          dischargeBackClone.style.width = '794px'
+          dischargeBackClone.style.height = '1123px'
+          dischargeBackClone.style.backgroundColor = '#ffffff'
+          document.body.appendChild(dischargeBackClone)
+
+          const dischargeBackCanvas = await html2canvas(dischargeBackClone, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            useCORS: true
+          })
+          document.body.removeChild(dischargeBackClone)
+          const dischargeBackImgData = dischargeBackCanvas.toDataURL('image/png')
+
+          const dischargeBackPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
+          const dischargeBackPngImage = await pdfDoc.embedPng(dischargeBackImgData)
+
+          const dischargeBackImgWidth = dischargeBackPngImage.width
+          const dischargeBackImgHeight = dischargeBackPngImage.height
+          const dischargeBackScale = Math.min(
+            PAGE_WIDTH / dischargeBackImgWidth,
+            PAGE_HEIGHT / dischargeBackImgHeight
+          )
+          const dischargeBackDrawWidth = dischargeBackImgWidth * dischargeBackScale
+          const dischargeBackDrawHeight = dischargeBackImgHeight * dischargeBackScale
+          const dischargeBackX = (PAGE_WIDTH - dischargeBackDrawWidth) / 2
+          const dischargeBackY = (PAGE_HEIGHT - dischargeBackDrawHeight) / 2
+
+          dischargeBackPage.drawImage(dischargeBackPngImage, {
+            x: dischargeBackX,
+            y: dischargeBackY,
+            width: dischargeBackDrawWidth,
+            height: dischargeBackDrawHeight
+          })
+        }
       }
 
       const pdfBytes = await pdfDoc.save()
@@ -517,12 +559,20 @@ const ActiveInPatientTableWithReceipts: React.FC<ActiveInPatientTableWithReceipt
 
                 {(selectedReceiptType === 'discharge' || selectedReceiptType === 'both') &&
                 relatedDischarge ? (
-                  <div
-                    className={selectedReceiptType === 'both' ? 'mt-8' : ''}
-                    ref={dischargeSummaryRef}
-                  >
-                    <InPatientReceiptViewer inpatient={relatedDischarge} receiptType="discharge" />
-                  </div>
+                  <>
+                    <div
+                      className={selectedReceiptType === 'both' ? 'mt-8' : ''}
+                      ref={dischargeSummaryRef}
+                    >
+                      <InPatientReceiptViewer
+                        inpatient={relatedDischarge}
+                        receiptType="discharge"
+                      />
+                    </div>
+                    <div className="mt-8 page-break-before" ref={dischargeBackRef}>
+                      <DischargeBack />
+                    </div>
+                  </>
                 ) : null}
               </div>
 

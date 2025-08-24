@@ -21,6 +21,7 @@ export interface StaffUser {
   data: boolean
   certificates: boolean
   labs: boolean
+  expenses: boolean
   permissions?: {
     patients?: boolean
     prescriptions?: boolean
@@ -35,6 +36,7 @@ export interface StaffUser {
     duesFollowUp?: boolean
     data?: boolean
     certificates?: boolean
+    expenses?: boolean
   }
   isAdmin: boolean // Quick check for admin status
   createdAt: string

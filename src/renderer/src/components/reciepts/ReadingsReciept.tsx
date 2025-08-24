@@ -526,12 +526,13 @@ export default function EyeReceipt({
             <div className="text-left text-[11px]"></div>
 
             <div className="text-right text-[11px] space-y-1">
+              <p className="font-bold">AUTHORISED SIGNATORY</p>
               <p className="font-bold">For SRI HARSHA EYE HOSPITAL</p>
             </div>
           </div>
 
           {/* Bottom Disclaimer */}
-          <div className="border-t border-[#000000] mt-2 pt-1 text-center text-[9px] text-[#000000]">
+          <div className="border-t border-[#000000] mt-2 pt-1 text-center text-[9px] text-[#000000] pb-5">
             <p className="mt-1 text-sm font-semibold text-center">
               Arogya Sri and Insurance facilities available
             </p>
@@ -539,7 +540,16 @@ export default function EyeReceipt({
               <span>
                 This is a computer generated receipt. Please preserve this for your records.
               </span>
-              <span>Generated on: {new Date().toLocaleString()}</span>
+              <span>
+                Generated on:{' '}
+                {new Date().toLocaleDateString('en-GB', {
+                  timeZone: 'Asia/Kolkata',
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric'
+                })}{' '}
+                {new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata' })}
+              </span>
             </div>
           </div>
         </div>
@@ -549,7 +559,7 @@ export default function EyeReceipt({
         .receipt-container {
           width: 210mm;
           min-height: 297mm;
-          padding: 12mm;
+          padding: 8mm;
           font-family: 'Arial', sans-serif;
           line-height: 1.2;
           display: flex;
@@ -562,7 +572,7 @@ export default function EyeReceipt({
 
         .receipt-footer {
           margin-top: auto;
-          padding-top: 20px;
+          padding-top: 10px;
         }
 
         @media print {

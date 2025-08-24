@@ -39,6 +39,12 @@ type ApiResponse<T> = {
   data: T
   message: string
 }
+// Define the ReportData type to hold all report types
+type ReportData = {
+  reports: Prescription[]
+  inpatients: InPatient[]
+  labs: Lab[]
+}
 
 // Define the window API interface for TypeScript
 declare global {
@@ -52,6 +58,7 @@ declare global {
       searchPrescriptions: (searchTerm: string) => Promise<Prescription[]>
       getTodaysPrescriptions: () => Promise<Prescription[]>
       getLatestPrescriptionId: () => Promise<number>
+      getPrescriptionsById: (id: string) => Promise<Prescription[]>
       getPrescriptionsByPatientId: (patientId: string) => Promise<Prescription[]>
       getDropdownOptions: (fieldName: string) => Promise<string[]>
       deleteDropdownOption: (fieldName: string, value: string) => Promise<void>
@@ -65,6 +72,20 @@ declare global {
       searchLabs: (patientId: string) => Promise<Lab[]>
       getTodaysLabs: () => Promise<Lab[]>
       getPrescriptionsByDate: (date: string) => Promise<Prescription[]>
+      getdues: () => Promise<Prescription[]>
+      updateDue: (
+        id: string,
+        type?: string,
+        updatedAmount?: number,
+        receivedAmount?: number
+      ) => Promise<Prescription>
+      // Add getReports function to the interface
+      getReports: (id: string) => Promise<{
+        success: boolean
+        data: ReportData
+        error: string | null
+        statusCode: number
+      }>
     }
   }
 }
@@ -702,7 +723,10 @@ const Prescriptions: React.FC = () => {
       const id = prescription.id
 
       // First, fetch the latest version of the prescription from the database
-      const response = await window.api.getPrescriptions()
+      const prescriptionData = (await window.api.getPrescriptionsById(
+        id
+      )) as unknown as ApiResponse<Prescription>
+      const response = prescriptionData.data
       const latestData = Array.isArray(response) ? response.find((p) => p.id === id) : null
 
       if (!latestData) {
@@ -884,20 +908,32 @@ const Prescriptions: React.FC = () => {
       })
 
       if (response && (response as StandardizedResponse<InPatient>).success) {
-        toast.success('Operation details saved successfully')
+        // Close the modal first to avoid UI freezing during data refresh
+        setShowOperationDetailsModal(false)
 
-        // Update the in-patients list with the updated patient
+        // Force immediate UI update with the updated patient data
         const updatedPatient = {
           ...selectedInPatient,
           ...inpatientData
         }
 
-        setInPatients((prev) =>
-          prev.map((p) => (p.id === selectedInPatient.id ? updatedPatient : p))
+        // Update the selected patient in the local state immediately
+        setSelectedInPatient(updatedPatient)
+
+        // Update the inPatients array with the updated patient
+        setInPatients((prevInPatients) =>
+          prevInPatients.map((p) => (p.id === updatedPatient.id ? updatedPatient : p))
         )
 
-        // Close the modal
-        setShowOperationDetailsModal(false)
+        // Show success message
+        toast.success('Operation details saved successfully')
+
+        // Then refresh data from the backend to ensure everything is in sync
+        // Use setTimeout to ensure the UI updates first
+        setTimeout(async () => {
+          await loadInPatients()
+          await loadPatients()
+        }, 100)
       } else {
         toast.error('Failed to save operation details')
       }
@@ -2007,12 +2043,14 @@ const Prescriptions: React.FC = () => {
             try {
               // Get the latest prescription data from the API
               const id = editingPrescription.id
-              const response = await window.api.getPrescriptions()
+              const response = await window.api.getPrescriptionsById(id)
 
               // Find the prescription with the matching ID
               let freshPrescription: Prescription | null = null
-              if (Array.isArray(response)) {
-                const foundPrescription = response.find((p) => p.id === id)
+              if (response) {
+                // Cast the response to the correct type
+                const prescriptionData = response as unknown as { data: Prescription[] }
+                const foundPrescription = prescriptionData.data.find((p) => p.id === id)
                 if (foundPrescription) {
                   freshPrescription = foundPrescription
                 }
@@ -2025,6 +2063,7 @@ const Prescriptions: React.FC = () => {
                 return freshPrescription
               } else {
                 toast.error('Failed to refresh prescription data')
+                console.error('Failed to refresh prescription data')
                 return null
               }
             } catch (error) {

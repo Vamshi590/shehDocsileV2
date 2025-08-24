@@ -59,7 +59,6 @@ const LabTableWithReceipts: React.FC<LabTableWithReceiptsProps> = ({
     setReportReceiptTypes([])
   }
 
-  console.log('labs', labs)
   // Handle receipt type selection
   const handleSelectReceiptType = (type: string): void => {
     // Exit report mode if we're selecting a specific receipt type

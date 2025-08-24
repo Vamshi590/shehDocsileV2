@@ -18,7 +18,7 @@ const ReportSearch: React.FC<ReportSearchProps> = ({
   loading
 }) => {
   return (
-    <div className="mb-6 bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+    <div className="max-w-7xl mt-4 mx-auto px-6 py-4 sm:px-8 lg:px-10 mb-6 bg-white p-6 rounded-lg shadow-sm border border-gray-100">
       <h2 className="text-lg font-medium text-gray-800 mb-4">Search Patient Reports</h2>
       <form onSubmit={handleSearch} className="space-y-4">
         <div className="flex flex-col md:flex-row md:items-center gap-4">

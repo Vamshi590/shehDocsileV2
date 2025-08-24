@@ -38,8 +38,6 @@ const OperationDetailsModal: React.FC<OperationDetailsModalProps> = ({
   const [visiblePrescriptions, setVisiblePrescriptions] = useState(1)
   const [medicineOptionss] = useState<string[]>(medicineOptions)
 
-  console.log(operationDetails)
-
   // Reset form data when modal opens/closes or when selected patient changes
   useEffect(() => {
     if (isOpen && selectedInPatient) {

@@ -24,6 +24,8 @@ interface PatientData {
   referredBy?: string
   mobile: string
   doctorName: string
+  doctorNames: string
+  onDutyDoctor: string
   department: string
   admissionDate?: string
   dateOfDischarge?: string
@@ -163,7 +165,7 @@ export default function InPatientDischargeSummary({
             </div>
             <div>
               <div className="font-bold">BILL NO</div>
-              <div>{''}</div>
+              <div>{patientData.billNumber}</div>
             </div>
             {/* Gender */}
             <div>
@@ -194,6 +196,11 @@ export default function InPatientDischargeSummary({
             <div>
               <div className="font-bold">DOCTOR NAME</div>
               <div>{patientData.doctorName}</div>
+            </div>
+            {/* Doctor Name */}
+            <div>
+              <div className="font-bold">ON DUTY DOCTOR</div>
+              <div>{patientData.onDutyDoctor}</div>
             </div>
             {/* Department */}
             <div>

@@ -67,14 +67,12 @@ const PrescriptionEditModal: React.FC<PrescriptionEditModalProps> = ({
         // Fallback to refreshing from API directly
         if (prescription?.id) {
           // Get the latest prescription data from the API
-          const response = await window.api.getPrescriptions()
-          const freshPrescription = Array.isArray(response)
-            ? response.find((p) => p.id === prescription.id)
-            : null
-
-          if (freshPrescription) {
+          const response = await window.api.getPrescriptionsById(prescription.id)
+          if (response) {
+            // Cast the response to the correct type
+            const prescriptionData = response as unknown as { data: typeof prescription }
             // Re-initialize receipt data with the fresh prescription data
-            initializeReceiptData(freshPrescription)
+            initializeReceiptData(prescriptionData.data)
           }
         }
       }
@@ -164,6 +162,10 @@ const PrescriptionEditModal: React.FC<PrescriptionEditModalProps> = ({
                         Cash Receipt Form
                       </button>
                     </nav>
+                  </div>
+
+                  <div>
+                    <h1 className="text-lg font-bold">{`${prescription?.['PATIENT NAME']}/${prescription?.['AGE']}`}</h1>
                   </div>
 
                   {/* Save button aligned to the right */}

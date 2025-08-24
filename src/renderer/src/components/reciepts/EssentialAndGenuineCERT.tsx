@@ -139,7 +139,7 @@ export default function EssentialityGenuinenessCertificate({
               <span className="font-bold">{patientData.guardianName || ''}</span> Gender{' '}
               <span className="font-bold">{patientData.gender}</span> Resident of{' '}
               <span className="font-bold">{patientData.resident}</span> Age{' '}
-              <span className="font-bold">{patientData.age}</span> has underwent
+              <span className="font-bold">{patientData.age}</span> has underwent{' '}
               <span className="font-bold">{treatmentData.operationDetails}</span> on{' '}
               <span className="font-bold">{treatmentData.underwentOn}</span> and discharged on{' '}
               <span className="font-bold">{treatmentData.dischargedOn}</span>
@@ -189,7 +189,7 @@ export default function EssentialityGenuinenessCertificate({
               ))}
 
               {/* Empty rows for additional items */}
-              {Array.from({ length: Math.max(0, 6 - billingItems.length) }).map((_, index) => (
+              {Array.from({ length: Math.max(0, billingItems.length) }).map((_, index) => (
                 <tr key={`empty-${index}`}>
                   <td className="border border-[#000000] p-2 h-8"></td>
                   <td className="border border-[#000000] p-2 h-8"></td>

@@ -277,38 +277,28 @@ const CertificateForm: React.FC<CertificateFormProps> = ({
       [field]: field === 'amount' ? (value === '' ? '' : parseFloat(value.toString()) || 0) : value
     }
 
+    // Calculate all financial values in one go
+    const totalAmount = updatedItems.reduce((sum, item) => {
+      const itemAmount =
+        typeof item.amount === 'string' ? parseFloat(item.amount) || 0 : item.amount || 0
+      return sum + itemAmount
+    }, 0)
+
+    const { advancePaid, discountPercent, amountReceived } = formData.billingData
+    const discountAmount = (totalAmount * discountPercent) / 100
+    const balance = totalAmount - advancePaid - discountAmount - amountReceived
+
+    // Update all billing data at once
     setFormData({
       ...formData,
-      billingItems: updatedItems
-    })
-
-    // Update total amount
-    if (field === 'amount') {
-      const totalAmount = updatedItems.reduce((sum, item) => {
-        const itemAmount =
-          typeof item.amount === 'string' ? parseFloat(item.amount) || 0 : item.amount || 0
-        return sum + itemAmount
-      }, 0)
-      const updatedBillingData = {
+      billingItems: updatedItems,
+      billingData: {
         ...formData.billingData,
-        totalAmount
+        totalAmount: parseFloat(totalAmount.toFixed(2)),
+        discountAmount: parseFloat(discountAmount.toFixed(2)),
+        balance: parseFloat(balance.toFixed(2))
       }
-
-      // Recalculate discount amount
-      updatedBillingData.discountAmount = (totalAmount * updatedBillingData.discountPercent) / 100
-
-      // Update balance
-      updatedBillingData.balance =
-        totalAmount -
-        updatedBillingData.advancePaid -
-        updatedBillingData.discountAmount -
-        updatedBillingData.amountReceived
-
-      setFormData({
-        ...formData,
-        billingData: updatedBillingData
-      })
-    }
+    })
   }
 
   // Add new billing item
@@ -335,24 +325,40 @@ const CertificateForm: React.FC<CertificateFormProps> = ({
   // Handle input changes for billing data
   const handleBillingDataChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const { name, value } = e.target
-    const numValue = parseFloat(value) || 0
+    const numValue = value === '' ? 0 : parseFloat(value) || 0
 
+    // Create updated billing data with the new value
     const updatedBillingData = {
       ...formData.billingData,
       [name]: numValue
     }
 
-    // Update discount amount when discount percent changes
-    if (name === 'discountPercent') {
-      updatedBillingData.discountAmount = (updatedBillingData.totalAmount * numValue) / 100
-    }
+    // Calculate total from billing items
+    const totalAmount = formData.billingItems.reduce((sum, item) => {
+      const itemAmount =
+        typeof item.amount === 'string' ? parseFloat(item.amount) || 0 : item.amount || 0
+      return sum + itemAmount
+    }, 0)
 
-    // Update balance
-    updatedBillingData.balance =
-      updatedBillingData.totalAmount -
-      updatedBillingData.advancePaid -
-      updatedBillingData.discountAmount -
-      updatedBillingData.amountReceived
+    // Always recalculate these values to ensure consistency
+    updatedBillingData.totalAmount = parseFloat(totalAmount.toFixed(2))
+
+    // Update discount amount based on current discount percent
+    const discountPercent =
+      name === 'discountPercent' ? numValue : updatedBillingData.discountPercent
+    updatedBillingData.discountAmount = parseFloat(
+      ((totalAmount * discountPercent) / 100).toFixed(2)
+    )
+
+    // Calculate balance with all updated values
+    updatedBillingData.balance = parseFloat(
+      (
+        updatedBillingData.totalAmount -
+        updatedBillingData.advancePaid -
+        updatedBillingData.discountAmount -
+        updatedBillingData.amountReceived
+      ).toFixed(2)
+    )
 
     setFormData({
       ...formData,
@@ -368,25 +374,35 @@ const CertificateForm: React.FC<CertificateFormProps> = ({
       return sum + itemAmount
     }, 0)
 
-    const updatedBillingData = {
-      ...formData.billingData,
-      totalAmount
-    }
+    // Format values to 2 decimal places for consistency
+    const formattedTotal = parseFloat(totalAmount.toFixed(2))
+    const discountAmount = parseFloat(
+      ((formattedTotal * formData.billingData.discountPercent) / 100).toFixed(2)
+    )
+    const balance = parseFloat(
+      (
+        formattedTotal -
+        formData.billingData.advancePaid -
+        discountAmount -
+        formData.billingData.amountReceived
+      ).toFixed(2)
+    )
 
-    // Recalculate discount amount
-    updatedBillingData.discountAmount = (totalAmount * updatedBillingData.discountPercent) / 100
-
-    // Update balance
-    updatedBillingData.balance =
-      totalAmount -
-      updatedBillingData.advancePaid -
-      updatedBillingData.discountAmount -
-      updatedBillingData.amountReceived
-
+    // Update all billing data at once with formatted values
     setFormData({
       ...formData,
-      billingData: updatedBillingData
+      billingData: {
+        ...formData.billingData,
+        totalAmount: formattedTotal,
+        discountAmount: discountAmount,
+        balance: balance
+      }
     })
+  }
+
+  // Prevent wheel events from changing number input values
+  const preventWheelChange = (e: React.WheelEvent<HTMLInputElement>): void => {
+    e.currentTarget.blur()
   }
 
   // Handle authorized signatory change
@@ -652,6 +668,7 @@ const CertificateForm: React.FC<CertificateFormProps> = ({
                       type="number"
                       placeholder="Amount"
                       value={item.amount || ''}
+                      onWheel={preventWheelChange}
                       onChange={(e) => handleBillingItemChange(index, 'amount', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     />
@@ -709,6 +726,7 @@ const CertificateForm: React.FC<CertificateFormProps> = ({
                     type="number"
                     name="totalAmount"
                     value={formData.billingData.totalAmount}
+                    onWheel={preventWheelChange}
                     onChange={handleBillingDataChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
                     readOnly
@@ -722,6 +740,7 @@ const CertificateForm: React.FC<CertificateFormProps> = ({
                     type="number"
                     name="advancePaid"
                     value={formData.billingData.advancePaid}
+                    onWheel={preventWheelChange}
                     onChange={handleBillingDataChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   />
@@ -732,6 +751,7 @@ const CertificateForm: React.FC<CertificateFormProps> = ({
                     type="number"
                     name="discountPercent"
                     value={formData.billingData.discountPercent}
+                    onWheel={preventWheelChange}
                     onChange={handleBillingDataChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   />
@@ -744,6 +764,7 @@ const CertificateForm: React.FC<CertificateFormProps> = ({
                     type="number"
                     name="discountAmount"
                     value={formData.billingData.discountAmount}
+                    onWheel={preventWheelChange}
                     onChange={handleBillingDataChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
                     readOnly
@@ -757,6 +778,7 @@ const CertificateForm: React.FC<CertificateFormProps> = ({
                     type="number"
                     name="amountReceived"
                     value={formData.billingData.amountReceived}
+                    onWheel={preventWheelChange}
                     onChange={handleBillingDataChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   />
@@ -767,6 +789,7 @@ const CertificateForm: React.FC<CertificateFormProps> = ({
                     type="number"
                     name="balance"
                     value={formData.billingData.balance}
+                    onWheel={preventWheelChange}
                     onChange={handleBillingDataChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
                     readOnly

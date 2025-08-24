@@ -218,6 +218,13 @@ export interface AnalyticsData {
   patientDistribution?: RegionData[]
   revenueDistribution?: RegionData[]
 
+  // Surgery to inpatient conversion rate
+  conversionRate: number
+
+  // Total expenses
+  totalExpenses: number
+  patientwithsurgery: number
+  convertedPatientsCount: number
   // Allow for additional dynamic properties
   [key: string]: unknown
 }

@@ -15,6 +15,7 @@ interface ApiResponse<T> {
 export interface InPatient {
   id: string
   patientId: string
+  opid?: string
   name: string
   age: string
   gender: string
@@ -75,30 +76,31 @@ const InPatients: React.FC<{ showAddForm: boolean; setShowAddForm: (value: boole
   const [showEditModal, setShowEditModal] = useState(false)
   const [selectedInPatient, setSelectedInPatient] = useState<InPatient | null>(null)
 
+  // Function to fetch in-patients
+  const fetchInPatients = async (): Promise<void> => {
+    try {
+      setLoading(true)
+      // Use type assertion for API calls with more specific types
+      const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
+      const response = (await api.getInPatients()) as ApiResponse<InPatient[]>
+      console.log(response)
+
+      if (response.success) {
+        setInpatients(response.data)
+      } else {
+        console.error('Error loading in-patients:', response.message)
+        toast.error(response.message)
+      }
+    } catch (err) {
+      console.error('Error loading in-patients:', err)
+      toast.error('Failed to load in-patients')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Load in-patients on component mount
   useEffect(() => {
-    const fetchInPatients = async (): Promise<void> => {
-      try {
-        setLoading(true)
-        // Use type assertion for API calls with more specific types
-        const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
-        const response = (await api.getInPatients()) as ApiResponse<InPatient[]>
-        console.log(response)
-
-        if (response.success) {
-          setInpatients(response.data)
-        } else {
-          console.error('Error loading in-patients:', response.message)
-          toast.error(response.message)
-        }
-      } catch (err) {
-        console.error('Error loading in-patients:', err)
-        toast.error('Failed to load in-patients')
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchInPatients()
   }, [])
 
@@ -109,8 +111,8 @@ const InPatients: React.FC<{ showAddForm: boolean; setShowAddForm: (value: boole
       const response = (await api.addInPatient(inpatient)) as ApiResponse<InPatient>
 
       if (response.success) {
-        setInpatients((prevInpatients) => [...prevInpatients, response.data])
         toast.success('In-patient added successfully')
+        fetchInPatients()
         setShowAddForm(false)
       } else {
         console.error('Error adding in-patient:', response.message)
@@ -135,12 +137,10 @@ const InPatients: React.FC<{ showAddForm: boolean; setShowAddForm: (value: boole
       })) as ApiResponse<InPatient>
 
       if (response.success) {
-        setInpatients((prevInpatients) =>
-          prevInpatients.map((p) => (p.id === id ? response.data : p))
-        )
         toast.success('In-patient updated successfully')
         setShowEditModal(false)
         setSelectedInPatient(null)
+        fetchInPatients()
       } else {
         console.error('Error updating in-patient:', response.message)
         toast.error(response.message)

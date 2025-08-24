@@ -97,26 +97,6 @@ const PatientForm: React.FC<PatientFormProps> = ({
     ...(initialValues?.id ? { id: initialValues.id } : {})
   })
 
-  // Dynamic dropdown options state - fetched from backend
-  const [dynamicDoctorOptions, setDynamicDoctorOptions] = useState<string[]>([])
-  const [dynamicDepartmentOptions, setDynamicDepartmentOptions] = useState<string[]>([])
-  const [dynamicReferredByOptions, setDynamicReferredByOptions] = useState<string[]>([])
-
-  // Load dropdown options on component mount
-  useEffect(() => {
-    const loadDropdownOptions = async (): Promise<void> => {
-      const [doctorOpts, departmentOpts, referredByOpts] = await Promise.all([
-        fetchDropdownOptions('doctorName'),
-        fetchDropdownOptions('department'),
-        fetchDropdownOptions('referredBy')
-      ])
-      setDynamicDoctorOptions(doctorOpts)
-      setDynamicDepartmentOptions(departmentOpts)
-      setDynamicReferredByOptions(referredByOpts)
-    }
-    loadDropdownOptions()
-  }, [])
-
   // Function to fetch the latest patient ID and generate the next one
   const fetchLatestPatientId = async (force = false): Promise<void> => {
     try {
@@ -182,74 +162,6 @@ const PatientForm: React.FC<PatientFormProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialValues, formData.patientId, isExistingPatientMode, patientCount])
 
-  // Helper function to fetch dropdown options from backend
-  const fetchDropdownOptions = async (fieldName: string): Promise<string[]> => {
-    try {
-      const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
-      const result = (await api.getDropdownOptions(fieldName)) as {
-        success: boolean
-        options?: string[]
-        error?: string
-      }
-      if (result.success && result.options) {
-        return result.options
-      } else {
-        console.warn(`Failed to fetch ${fieldName} options:`, result.error)
-        // Return fallback options from static imports
-        switch (fieldName) {
-          case 'doctorName':
-            return doctorOptions
-          case 'department':
-            return departmentOptions
-          case 'referredBy':
-            return referredByOptions
-          default:
-            return []
-        }
-      }
-    } catch (error) {
-      console.error(`Error fetching ${fieldName} options:`, error)
-      // Return fallback options from static imports
-      switch (fieldName) {
-        case 'doctorName':
-          return doctorOptions
-        case 'department':
-          return departmentOptions
-        case 'referredBy':
-          return referredByOptions
-        default:
-          return []
-      }
-    }
-  }
-
-  // Helper function to add new option permanently and refresh options
-  const addNewOptionPermanently = async (fieldName: string, value: string): Promise<void> => {
-    if (!value.trim()) return
-
-    try {
-      const api = window.api as Record<string, (...args: unknown[]) => Promise<unknown>>
-      const result = await api.addDropdownOption(fieldName, value)
-      if (result) {
-        console.log(`Added '${value}' to ${fieldName} options permanently`)
-        // Refresh the options from backend to get the updated list
-        const updatedOptions = await fetchDropdownOptions(fieldName)
-        switch (fieldName) {
-          case 'doctorName':
-            setDynamicDoctorOptions(updatedOptions)
-            break
-          case 'department':
-            setDynamicDepartmentOptions(updatedOptions)
-            break
-          case 'referredBy':
-            setDynamicReferredByOptions(updatedOptions)
-            break
-        }
-      }
-    } catch (error) {
-      console.error('Error adding dropdown option:', error)
-    }
-  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>): void => {
     const { name, value } = e.target
@@ -790,9 +702,8 @@ const PatientForm: React.FC<PatientFormProps> = ({
               id="doctorName"
               name="doctorName"
               value={formData.doctorName}
-              options={dynamicDoctorOptions}
+              options={doctorOptions}
               onChange={handleChange}
-              onAddNewOption={addNewOptionPermanently}
               placeholder="Select or type doctor name..."
               className="bg-white"
               required
@@ -807,9 +718,8 @@ const PatientForm: React.FC<PatientFormProps> = ({
               id="department"
               name="department"
               value={formData.department}
-              options={dynamicDepartmentOptions}
+              options={departmentOptions}
               onChange={handleChange}
-              onAddNewOption={addNewOptionPermanently}
               placeholder="Select or type department..."
               className="bg-white"
             />
@@ -823,9 +733,8 @@ const PatientForm: React.FC<PatientFormProps> = ({
               id="referredBy"
               name="referredBy"
               value={formData.referredBy}
-              options={dynamicReferredByOptions}
+              options={referredByOptions}
               onChange={handleChange}
-              onAddNewOption={addNewOptionPermanently}
               placeholder="Select or type referrer..."
               className="bg-white"
             />

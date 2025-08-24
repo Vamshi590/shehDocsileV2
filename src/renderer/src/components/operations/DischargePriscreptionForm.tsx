@@ -38,10 +38,11 @@ declare global {
       searchPrescriptions: (searchTerm: string) => Promise<Prescription[]>
       getTodaysPrescriptions: () => Promise<Prescription[]>
       getLatestPrescriptionId: () => Promise<number>
+      getPrescriptionsById: (id: string) => Promise<Prescription[]>
       getPrescriptionsByPatientId: (patientId: string) => Promise<Prescription[]>
       getDropdownOptions: (fieldName: string) => Promise<string[]>
-      addDropdownOption: (fieldName: string, value: string) => Promise<void>
       deleteDropdownOption: (fieldName: string, value: string) => Promise<void>
+      addDropdownOption: (fieldName: string, value: string) => Promise<void>
       openPdfInWindow: (pdfBuffer: Uint8Array) => Promise<{ success: boolean; error?: string }>
       getLatestPatientId: () => Promise<number>
       getLabs: () => Promise<Lab[]>
@@ -51,6 +52,13 @@ declare global {
       searchLabs: (patientId: string) => Promise<Lab[]>
       getTodaysLabs: () => Promise<Lab[]>
       getPrescriptionsByDate: (date: string) => Promise<Prescription[]>
+      getdues: () => Promise<Prescription[]>
+      updateDue: (
+        id: string,
+        type?: string,
+        updatedAmount?: number,
+        receivedAmount?: number
+      ) => Promise<Prescription>
     }
   }
 }

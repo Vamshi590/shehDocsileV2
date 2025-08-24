@@ -25,7 +25,9 @@ const InPatientReceiptViewer: React.FC<InPatientReceiptViewerProps> = ({
     address: String(inpatient.address || ''),
     mobile: String(inpatient.phone || ''),
     referredBy: String(inpatient.referredBy || ''),
-    doctorName: String(inpatient.onDutyDoctor || 'Dr. CH. SRILATHA'),
+    doctorName: String(inpatient.doctorNames[0] || 'Dr. CH. SRILATHA'),
+    doctorNames: String(inpatient.doctorNames || ''),
+    onDutyDoctor: String(inpatient.onDutyDoctor || ''),
     department: String(inpatient.department || 'OPHTHALMOLOGY'),
     admissionDate: String(inpatient.admissionDate || ''),
     dateOfDischarge: String(''),
@@ -33,6 +35,8 @@ const InPatientReceiptViewer: React.FC<InPatientReceiptViewerProps> = ({
     followUpDate: String(inpatient.followUpDate || '')
   }
 
+  console.log('patientData', patientData)
+  console.log('inpatient', inpatient)
   // Format payment data
   const paymentData = {
     totalAmount: Number(inpatient.packageAmount || 0),
@@ -128,13 +132,17 @@ const InPatientReceiptViewer: React.FC<InPatientReceiptViewerProps> = ({
             <InPatientDischargeSummary
               patientData={patientData}
               admissionDate={patientData.admissionDate}
-              dateOfDischarge={patientData.dateOfDischarge}
-              operationDate={patientData.dateOfOperation}
+              dateOfDischarge={patientData.dateOfDischarge || inpatient.dischargeDate}
+              operationDate={patientData.dateOfOperation || inpatient.operationDate}
               dischargePrescriptionData={prescriptionData}
-              provisionDiagnosis={inpatient.provisionDiagnosis || ''}
-              operationProcedure={inpatient.operationProcedure || ''}
+              provisionDiagnosis={
+                inpatient.provisionDiagnosis || inpatient.provisionDiagnosis || ''
+              }
+              operationProcedure={
+                inpatient.operationProcedure || inpatient.operationProcedure || ''
+              }
               billNumber={patientData.billNumber}
-              operationDetails={inpatient.operationDetails || ''}
+              operationDetails={inpatient.operationDetails || inpatient.operationDetails || ''}
               authorizedSignatory={''}
             />
           </div>
